@@ -1,0 +1,37 @@
+# Archivos sensibles
+*.backup*
+*.tar.gz
+*.zip
+*.pcap
+*.log
+
+# Datos de sesión
+credenciales.txt
+tokens.txt
+api_keys.txt
+
+# Backups locales
+backups/*.tar.gz
+backups/*.sh.backup
+
+# Archivos temporales
+*.tmp
+*.temp
+*.swp
+
+# Logs
+*.log
+logs/
+
+# Capturas de tráfico
+*.pcap
+capturas/
+
+# Hash files
+*.hash
+hashes/
+
+# Configuraciones locales
+config/local.conf
+.env
+.env.local
