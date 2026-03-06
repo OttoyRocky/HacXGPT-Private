@@ -17,7 +17,7 @@
 ## ⚙️ REQUISITOS DEL SISTEMA
 
 ### Mínimos:
-- **SO**: Linux (Kali Linux recomendado), macOS, o **WSL en Windows** (como estás usando ahora)
+- **SO**: Linux (Kali Linux recomendado), macOS, o **WSL en Windows**
 - **Shell**: Bash 4.0+ o ZSH
 - **Permisos**: Ejecución de scripts (`chmod +x`)
 
@@ -71,7 +71,7 @@ Guardar resultados: Opción S en cualquier submenú
 Ejemplo práctico con WSL
 bash
 ./hacx_advanced.sh
-# Menú > Opción 10 (Purple Team) > T1003 > objetivo: ztlab.com.ar
+# Menú > Opción 10 (Purple Team) > T1003 > objetivo: ejemplo.com
 # Verás:
 # 🔴 ATAQUE — Comandos de extracción de credenciales
 # 🔵 DEFENSA — Medidas de protección
@@ -158,7 +158,7 @@ v8.0 EXPERTO (Marzo 2026): MITRE ATT&CK completo, Purple Team, Post-Explotación
 v7.0 (Anterior): Chat libre, escaneo sigiloso
 
 🐧 NOTA PARA USUARIOS DE WSL
-Si estás usando WSL como en este momento:
+Si estás usando WSL:
 
 Los scripts funcionan perfectamente en el entorno Linux de WSL
 
@@ -180,3 +180,4 @@ Issues: Limitado a colaboradores autorizados
 
 Documentación: Ver carpeta /docs
 
+© 2026 OttoyRocky - Repositorio Privado - Todos los derechos reservados
