@@ -1,3 +1,6 @@
-* @OttoyRocky
-hacx_advanced.sh @OttoyRocky
-*.sh @OttoyRocky
+# Los owners de todo el repo
+*       @OttoyRocky
+
+# Archivos críticos requieren tu aprobación específica
+hacx_advanced.sh    @OttoyRocky
+*.sh                @OttoyRocky
