@@ -35,3 +35,8 @@ hashes/
 config/local.conf
 .env
 .env.local
+input.txt
+*.tmp
+temp/
+input.txt
+*.txt
