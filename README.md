@@ -1,5 +1,10 @@
 # 🛡️ HacXGPT v8.0 EXPERTO - MITRE ATT&CK Framework
 
+![Linux](https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)
+![Kali](https://img.shields.io/badge/Kali_Linux-557C94?style=for-the-badge&logo=kali-linux&logoColor=white)
+![Bash](https://img.shields.io/badge/Bash-4EAA25?style=for-the-badge&logo=gnu-bash&logoColor=white)
+![GitHub](https://img.shields.io/badge/GitHub-100000?style=for-the-badge&logo=github&logoColor=white)
+
 ⚠️ **REPOSITORIO PRIVADO** - Acceso restringido
 
 ## 📋 DESCRIPCIÓN
@@ -181,3 +186,4 @@ Issues: Limitado a colaboradores autorizados
 Documentación: Ver carpeta /docs
 
 © 2026 OttoyRocky - Repositorio Privado - Todos los derechos reservados
+
