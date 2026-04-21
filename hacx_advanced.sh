@@ -17,13 +17,18 @@ if [[ -f "$SCRIPT_DIR/mitre_extras_2.sh" ]]; then
 fi
 if [[ -f "$SCRIPT_DIR/mitre_extras_3.sh" ]]; then
     source "$SCRIPT_DIR/mitre_extras_3.sh"
+
+# Cargar integracion Ollama
+if [ -f "$SCRIPT_DIR/ollama_integration.sh" ]; then
+    source "$SCRIPT_DIR/ollama_integration.sh"
+fi
 fi
 
 # ============================================
 # MEJORA 4: Manejo de errores con trap
 # ============================================
 trap 'echo -e "\n\e[0;31m⚠️  Script interrumpido. Saliendo...\e[0m"; exit 1' INT TERM
-trap 'exit_code=$?; if [ $exit_code -ne 0 ]; then echo -e "\e[0;31m⚠️  Error inesperado (código: $exit_code)\e[0m"; fi' ERR
+# trap 'exit_code=$?; if [ $exit_code -ne 0 ]; then echo -e "\e[0;31m⚠️  Error inesperado (código: $exit_code)\e[0m"; fi' ERR
 
 # ============================================
 # MEJORA 1: Colores usando \e en lugar de \033
@@ -1140,7 +1145,7 @@ chat_libre() {
             echo "$output"
             save_output "[$pregunta] $output"
         else
-            _chat_default
+            _chat_with_ollama "$pregunta"
         fi
 
         echo "══════════════════════════════════════════════"
