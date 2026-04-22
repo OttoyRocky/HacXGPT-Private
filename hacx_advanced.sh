@@ -2209,6 +2209,7 @@ while true; do
     echo -e "${RED}💣 11. ${NC} Post-Explotación ${YELLOW}(Win+Linux+Evasión)${NC}"
     echo -e "${CYAN}🕵️  12. ${NC} Simulación de APT ${YELLOW}(APT29·APT38·FIN7)${NC}"
     echo -e "${GREEN}📈 13. ${NC} Gap Analysis ${CYAN}/ Heat Map MITRE${NC}"
+    echo -e "${CYAN}📡 14. ${NC} Análisis nmap con IA"
     echo -e "${PURPLE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e "${CYAN}🎯 Objetivo actual: ${TARGET:-No definido}${NC}"
     echo -e "  ${BLUE}C.${NC}  Cambiar objetivo"
@@ -2220,7 +2221,7 @@ while true; do
     echo -e "${RED}❌  0. ${NC} Salir"
     echo ""
 
-    read -p "🎯 Selecciona opción [0-13, C, S]: " main_opcion
+    read -p "🎯 Selecciona opción [0-14, C, S]: " main_opcion
 
     case $main_opcion in
         1) reconocimiento_basico ;;
@@ -2236,6 +2237,9 @@ while true; do
         11) menu_post_explotacion ;;
         12) simular_apt ;;
         13) analizar_brechas ;;
+        14)
+            python3 nmap_ai.py
+            ;;
         [Cc]) preguntar_objetivo ;;
         [Ss])
             if [[ "$SAVE_MODE" == false ]]; then
