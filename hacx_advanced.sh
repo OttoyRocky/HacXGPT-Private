@@ -1,5 +1,5 @@
 #!/bin/bash
-# HACXGPT v8.0 EXPERTO — MITRE ATT&CK FRAMEWORK COMPLETO
+# HACXGPT v8.1 EXPERTO — MITRE ATT&CK FRAMEWORK COMPLETO
 
 # Cargar datos MITRE ATT&CK (matrices, tácticas, APTs, CVEs)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -137,7 +137,7 @@ show_banner() {
     clear_screen
     echo ""
     echo -e "${PURPLE}╔══════════════════════════════════════════════════╗${NC}"
-    echo -e "${PURPLE}║           ${CYAN}🛡️ HacXGPT v8.0 EXPERTO${PURPLE}              ║${NC}"
+    echo -e "${PURPLE}║           ${CYAN}🛡️ HacXGPT v8.1 EXPERTO${PURPLE}              ║${NC}"
     echo -e "${PURPLE}║      ${GREEN}MITRE ATT&CK ENTERPRISE FRAMEWORK${PURPLE}        ║${NC}"
     echo -e "${PURPLE}║      ${YELLOW}RED TEAM · BLUE TEAM · PURPLE TEAM${PURPLE}       ║${NC}"
     echo -e "${PURPLE}╚══════════════════════════════════════════════════╝${NC}"
@@ -637,7 +637,7 @@ generar_reportes() {
     <h1>🔐 Reporte de Seguridad</h1>
     <p><strong>Fecha:</strong> $(date)</p>
     <p><strong>Objetivo Principal:</strong> ${TARGET:-Ninguno}</p>
-    <p><strong>Generado por:</strong> HacXGPT v8.0</p>
+    <p><strong>Generado por:</strong> HacXGPT v8.1</p>
     
     <div class="section">
         <h2>📋 Resumen Ejecutivo</h2>
@@ -690,7 +690,7 @@ HTMLREPORT
 ================================================================
 Fecha: $(date)
 Objetivo: ${TARGET:-Ninguno}
-Generado por: HacXGPT v8.0
+Generado por: HacXGPT v8.1
 
 RESUMEN EJECUTIVO
 =================
@@ -2258,7 +2258,7 @@ while true; do
             show_banner
             echo ""
             echo -e "${GREEN}            ¡HASTA PRONTO! ${NC}"
-            echo -e "${BLUE}    Gracias por usar HacXGPT v8.0 EXPERTO ${NC}"
+            echo -e "${BLUE}    Gracias por usar HacXGPT v8.1 EXPERTO ${NC}"
             echo -e "${PURPLE}       MITRE ATT&CK Framework Edition ${NC}"
             echo ""
             echo ""
