@@ -2236,7 +2236,7 @@ while true; do
         10) modo_purple_team ;;
         11) menu_post_explotacion ;;
         12) simular_apt ;;
-        13) analizar_brechas ;;
+        13) ./run_gap_analysis.sh ;;
         14)
             python3 nmap_ai.py
             ;;
