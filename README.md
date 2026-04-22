@@ -1,189 +1,126 @@
-# 🛡️ HacXGPT v8.0 EXPERTO - MITRE ATT&CK Framework
+# 🛡️ HacXGPT v8.1 - MITRE ATT&CK Framework + IA Local
 
 ![Linux](https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)
 ![Kali](https://img.shields.io/badge/Kali_Linux-557C94?style=for-the-badge&logo=kali-linux&logoColor=white)
 ![Bash](https://img.shields.io/badge/Bash-4EAA25?style=for-the-badge&logo=gnu-bash&logoColor=white)
+![Ollama](https://img.shields.io/badge/Ollama-000000?style=for-the-badge&logo=ollama&logoColor=white)
 ![GitHub](https://img.shields.io/badge/GitHub-100000?style=for-the-badge&logo=github&logoColor=white)
 
-⚠️ **REPOSITORIO PRIVADO** - Acceso restringido
-
 ## 📋 DESCRIPCIÓN
-**HacXGPT v8.0 EXPERTO** es una herramienta educativa de ciberseguridad que implementa el **framework MITRE ATT&CK Enterprise** completo. Diseñada para profesionales de seguridad, estudiantes y equipos Red/Blue/Purple Team.
 
-### 🎯 CARACTERÍSTICAS PRINCIPALES
+**HacXGPT v8.1** es una herramienta educativa de ciberseguridad que combina el **framework MITRE ATT&CK Enterprise** completo con **IA local via Ollama**. Sin dependencias de APIs externas. Todo corre localmente.
+
+## 🎯 CARACTERÍSTICAS PRINCIPALES
+
+- **IA Local (Ollama)**: Chat libre con LLM real — responde cualquier pregunta de ciberseguridad
+- **Detección automática de entorno**: `mistral:7b` en Windows/WSL, `tinyllama` en Raspberry Pi
 - **MITRE ATT&CK Enterprise**: 14 tácticas con técnicas detalladas
 - **Purple Team**: Ataque (🔴) + Defensa (🔵) + Detección (🟣) para 10+ técnicas
 - **Post-Explotación**: Windows, Linux y técnicas de evasión
 - **Simulación APT**: APT29, APT38, FIN7 con killchain completa
 - **Gap Analysis**: Heat map visual de cobertura
 - **Sistema TARGET**: Objetivo persistente en todos los módulos
-- **Chat Libre**: Base de conocimiento con 200+ comandos
 
-## ⚙️ REQUISITOS DEL SISTEMA
+## ⚙️ REQUISITOS
 
-### Mínimos:
-- **SO**: Linux (Kali Linux recomendado), macOS, o **WSL en Windows**
-- **Shell**: Bash 4.0+ o ZSH
-- **Permisos**: Ejecución de scripts (`chmod +x`)
+- Linux / Kali / macOS / WSL en Windows
+- Bash 4.0+
+- Ollama instalado con al menos un modelo
 
-### Recomendados (para funcionalidad completa):
-```bash
-# Herramientas de pentesting (opcionales pero recomendadas)
-sudo apt update
-sudo apt install -y nmap nikto gobuster whatweb wfuzz sqlmap hydra john aircrack-ng
+\`\`\`bash
+curl -fsSL https://ollama.com/install.sh | sh
+ollama pull mistral:7b    # Windows/WSL
+ollama pull tinyllama     # Raspberry Pi
+\`\`\`
 
-# Frameworks adicionales
-pip3 install impacket bloodhound
-sudo gem install evil-winrm
-🚀 INSTALACIÓN Y CONFIGURACIÓN
-1. Clonar el repositorio
-bash
+Herramientas de pentesting (opcionales):
+
+\`\`\`bash
+sudo apt install -y nmap nikto gobuster sqlmap hydra john aircrack-ng
+\`\`\`
+
+## 🚀 INSTALACIÓN
+
+\`\`\`bash
 git clone https://github.com/OttoyRocky/HacXGPT-Private.git
 cd HacXGPT-Private
-2. Dar permisos de ejecución
-bash
-chmod +x hacx_advanced.sh
-chmod +x *.sh  # Para todos los scripts auxiliares
-3. (Opcional) Verificar dependencias
-bash
-# El script verificará automáticamente las herramientas al ejecutarse
-./hacx_advanced.sh --check-deps
-🎮 USO BÁSICO
-Ejecutar el script
-bash
+chmod +x *.sh
 ./hacx_advanced.sh
-Flujo de trabajo típico
-Establecer objetivo: Al entrar a cualquier módulo te pedirá IP/dominio
+\`\`\`
 
-Explorar módulos:
+## 🤖 IA LOCAL — CÓMO FUNCIONA
 
-1-8 → Módulos básicos (reconocimiento, escaneo, etc.)
+El Módulo 7 (Chat Libre) combina respuestas estructuradas con IA real:
 
-9 → Matriz MITRE ATT&CK
+| Modo | Cuándo | Qué hace |
+|------|--------|----------|
+| Keywords | Pregunta con tema conocido | Respuesta estructurada MITRE |
+| IA (Ollama) | Pregunta libre sin match | LLM responde en tiempo real |
 
-10 → Purple Team (técnica por técnica)
+Detección automática de entorno:
+- **Windows/WSL** → conecta a `172.20.160.1:11434` con `mistral:7b`
+- **Raspberry Pi / Linux nativo** → conecta a `localhost:11434` con `tinyllama`
 
-11 → Post-Explotación
+> **Nota WSL**: Ollama debe correr con `$env:OLLAMA_HOST="0.0.0.0:11434"; ollama serve`
 
-12 → Simulación APT
+## 🎮 USO
 
-13 → Gap Analysis
-
-Cambiar objetivo: Opción C en menú principal
-
-Guardar resultados: Opción S en cualquier submenú
-
-Ejemplo práctico con WSL
-bash
+\`\`\`bash
 ./hacx_advanced.sh
-# Menú > Opción 10 (Purple Team) > T1003 > objetivo: ejemplo.com
-# Verás:
-# 🔴 ATAQUE — Comandos de extracción de credenciales
-# 🔵 DEFENSA — Medidas de protección
-# 🟣 DETECCIÓN — Logs a monitorear
-📁 ESTRUCTURA DEL PROYECTO
-text
+\`\`\`
+
+| Opción | Módulo |
+|--------|--------|
+| 1-8 | Reconocimiento, escaneo, explotación |
+| 7 | Chat libre con IA local |
+| 9 | Matriz MITRE ATT&CK completa |
+| 10 | Purple Team por técnica |
+| 11 | Post-Explotación |
+| 12 | Simulación APT |
+| 13 | Gap Analysis |
+| C | Cambiar objetivo |
+| S | Guardar resultados |
+
+## 📁 ESTRUCTURA
+
+\`\`\`
 HacXGPT-Private/
-├── hacx_advanced.sh          # Script principal (v8.0 EXPERTO)
-├── mitre_data.sh             # Base de datos MITRE principal
-├── mitre_extras_1.sh         # Datos MITRE adicionales (Reconnaissance)
-├── mitre_extras_2.sh         # Datos MITRE adicionales (Execution/Persistence)
-├── mitre_extras_3.sh         # Datos MITRE adicionales (Exfiltration/Impact)
-├── .cursorrules              # Reglas para desarrollo con IA
-├── docs/                      # Documentación detallada
-│   ├── USO.md                # Guía de uso
-│   └── MITRE_ATTACK.md       # Explicación del framework
-└── README.md                  # Este archivo
-🛡️ MÓDULOS DETALLADOS
-Módulo 9 - Matriz MITRE ATT&CK
-14 tácticas: Desde Reconnaissance (TA0043) hasta Impact (TA0040)
+├── hacx_advanced.sh       # Script principal
+├── ollama_integration.sh  # Módulo IA local
+├── mitre_data.sh          # Base de datos MITRE principal
+├── mitre_extras_1.sh      # MITRE: Reconnaissance
+├── mitre_extras_2.sh      # MITRE: Execution/Persistence
+├── mitre_extras_3.sh      # MITRE: Exfiltration/Impact
+└── docs/
+    ├── USO.md
+    └── MITRE_ATTACK.md
+\`\`\`
 
-Técnicas clave: 5 técnicas por táctica con descripciones
+## 🔄 CHANGELOG
 
-Modo Purple: Ver técnica en modo completo (🔴🔵🟣)
+| Versión | Fecha | Cambios |
+|---------|-------|---------|
+| v8.1 | Abril 2026 | IA local Ollama, detección automática Pi vs Windows/WSL |
+| v8.0 | Marzo 2026 | MITRE completo, Purple Team, APT Sims, Gap Analysis |
+| v7.0 | Anterior | Chat libre, escaneo sigiloso |
 
-Módulo 10 - Purple Team
-Técnicas implementadas:
+## ⚠️ AVISO LEGAL
 
-T1003: OS Credential Dumping (Mimikatz, LSASS)
+Uso exclusivo para fines educativos y auditorías autorizadas.
 
-T1027: Obfuscated Files/Info (Ofuscación)
+- ✅ Solo contra sistemas propios o con permiso documentado
+- ❌ Prohibido sin autorización explícita
+- El usuario asume toda responsabilidad legal y ética
 
-T1055: Process Injection (Inyección de código)
+## 📚 RECURSOS
 
-T1059: Command and Scripting Interpreter (PowerShell, bash)
+- [MITRE ATT&CK Enterprise](https://attack.mitre.org/)
+- [Ollama](https://ollama.com/)
+- [OWASP Top 10](https://owasp.org/www-project-top-ten/)
+- [Kali Linux Docs](https://www.kali.org/docs/)
 
-T1078: Valid Accounts (Cuentas válidas)
+## 📧 CONTACTO
 
-T1021: Remote Services (Psexec, WinRM, SSH)
+Issues y contribuciones bienvenidas via GitHub.
 
-T1053: Scheduled Task/Job (Tareas programadas)
-
-T1190: Exploit Public-Facing Application (Exploits web)
-
-T1566: Phishing (Ingeniería social)
-
-T1562: Impair Defenses (Deshabilitar AV/EDR)
-
-Módulo 11 - Post-Explotación
-Windows: Mimikatz, extracción de hashes, persistencia
-
-Linux: Bash history, sudo tokens, cron jobs
-
-Evasión: Bypass UAC, AMSI bypass, process injection
-
-Módulo 12 - Simulación APT
-APT29 (Cozy Bear): Spear phishing, PowerShell Empire
-
-APT38 (Lazarus): Ataques destructivos, ransomware
-
-FIN7: Malware point-of-sale, harvesting
-
-Módulo 13 - Gap Analysis
-Heat map visual de técnicas probadas vs no probadas
-
-Colores: ✅ Verde (probado), 🟡 Amarillo (parcial), ❌ Rojo (no probado)
-
-⚠️ ADVERTENCIAS LEGALES
-IMPORTANTE: Esta herramienta es EXCLUSIVAMENTE PARA FINES EDUCATIVOS Y PROFESIONALES AUTORIZADOS.
-
-✅ REQUIERE autorización explícita por escrito para cualquier prueba
-
-✅ SOLO usar contra sistemas propios o con permiso documentado
-
-❌ NO usar contra sistemas sin consentimiento explícito
-
-❌ NO usar para actividades ilegales o maliciosas
-
-El usuario asume toda la responsabilidad legal y ética de su uso.
-
-🔄 ACTUALIZACIONES
-v8.0 EXPERTO (Marzo 2026): MITRE ATT&CK completo, Purple Team, Post-Explotación, APT Sims, Gap Analysis
-
-v7.0 (Anterior): Chat libre, escaneo sigiloso
-
-🐧 NOTA PARA USUARIOS DE WSL
-Si estás usando WSL:
-
-Los scripts funcionan perfectamente en el entorno Linux de WSL
-
-Podés acceder a archivos de Windows desde /mnt/c/
-
-Recomendación: mantener los scripts dentro del filesystem de Linux para mejor rendimiento
-
-📚 RECURSOS ADICIONALES
-MITRE ATT&CK Enterprise
-
-OWASP Top 10
-
-Kali Linux Documentation
-
-📧 CONTACTO Y SOPORTE
-Para uso autorizado, dudas o reportes:
-
-Issues: Limitado a colaboradores autorizados
-
-Documentación: Ver carpeta /docs
-
-© 2026 OttoyRocky - Repositorio Privado - Todos los derechos reservados
-
+© 2026 OttoyRocky — MIT License
