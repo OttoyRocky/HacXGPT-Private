@@ -18,13 +18,10 @@ _chat_with_ollama() {
     local RED='\033[0;31m'
     local NC='\033[0m'
     
-    if ! command -v ollama &> /dev/null; then
-        _chat_default_fallback "$pregunta"
-        return
-    fi
+    # Ollama corre en Windows, acceso via curl directo
     
     # Priorizar modelos livianos para Raspberry Pi
-    local model=$(ollama list 2>/dev/null | grep -E "tinyllama|gemma:2b|phi3:mini" | head -1 | awk '{print $1}')
+    local model="mistral:7b"
     if [[ -z "$model" ]]; then
         model=$(ollama list 2>/dev/null | grep -v "NAME" | head -1 | awk '{print $1}')
     fi
@@ -39,7 +36,7 @@ _chat_with_ollama() {
     local system_prompt="Eres HacXGPT, experto en ciberseguridad ofensiva y pentesting. Contexto: El objetivo actual es $target. Responde de forma técnica, práctica y directa. Sé conciso."
     
     # Llamar a Ollama con contexto limitado para mayor velocidad
-    response=$(curl -s http://localhost:11434/api/generate -d "{
+    response=$(curl -s http://172.20.160.1:11434/api/generate -d "{
         \"model\": \"$model\",
         \"prompt\": \"$system_prompt\n\nPregunta del usuario: $pregunta\",
         \"stream\": false,
