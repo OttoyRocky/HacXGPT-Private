@@ -48,6 +48,41 @@ chmod +x *.sh
 ./hacx_advanced.sh
 \`\`\`
 
+## 📦 Dependencias y Herramientas
+
+### Instalación automática (recomendada)
+
+```bash
+# Instalar todas las herramientas necesarias
+sudo apt update && sudo apt install -y \
+    whois \
+    dnsutils \
+    nmap \
+    nikto \
+    gobuster \
+    ffuf \
+    curl \
+    wget \
+    jq \
+    python3 \
+    python3-pip
+
+# Subfinder (subdominios)
+go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+
+# HTTPX (probes HTTP)
+go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
+
+# Gau (URLs)
+go install -v github.com/lc/gau/v2/cmd/gau@latest
+
+# Modelo recomendado para Windows/WSL
+ollama pull mistral:7b
+
+# Modelos para Raspberry Pi (más livianos)
+ollama pull tinyllama
+ollama pull gemma:2b
+
 ## 🤖 IA LOCAL — CÓMO FUNCIONA
 
 El Módulo 7 (Chat Libre) combina respuestas estructuradas con IA real:
