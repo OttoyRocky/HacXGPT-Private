@@ -36,7 +36,7 @@ ollama pull tinyllama     # Raspberry Pi
 Herramientas de pentesting (opcionales):
 
 \`\`\`bash
-sudo apt install -y nmap nikto gobuster sqlmap hydra john aircrack-ng
+sudo apt install -y nmap nikto gobuster sqlmap hydra john aircrack-ng whatweb dirb whois
 \`\`\`
 
 ## 🚀 INSTALACIÓN
@@ -83,6 +83,42 @@ ollama pull mistral:7b
 ollama pull tinyllama
 ollama pull gemma:2b
 
+## 🗂️ WORDLISTS
+
+Las wordlists de dirb están disponibles en:
+
+```bash
+ls /usr/share/dirb/wordlists/
+# Más usada:
+/usr/share/dirb/wordlists/common.txt
+```
+
+## 🔧 SOLUCIÓN DE PROBLEMAS COMUNES
+
+### Error: "connection refused" en gobuster
+Usá HTTP en lugar de HTTPS:
+```bash
+gobuster dir -u http://objetivo.com -w /usr/share/dirb/wordlists/common.txt
+```
+
+### Nikto muy lento en WSL
+Usá escaneo rápido con Tuning:
+```bash
+nikto -h https://ejemplo.com -Tuning 123
+```
+
+### Herramienta no encontrada (whatweb, whois, dirb)
+```bash
+sudo apt install whatweb whois dirb -y
+```
+
+### Detectar IP de Windows desde WSL (para Ollama)
+```bash
+ip route | grep default | awk '{print $3}'
+# Luego configurar:
+echo "OLLAMA_HOST=\"$(ip route | grep default | awk '{print $3}\'):11434\"" > ollama_config.sh
+```
+
 ## 🤖 IA LOCAL — CÓMO FUNCIONA
 
 El Módulo 7 (Chat Libre) combina respuestas estructuradas con IA real:
@@ -113,6 +149,7 @@ Detección automática de entorno:
 | 11 | Post-Explotación |
 | 12 | Simulación APT |
 | 13 | Gap Analysis |
+| 14 | Análisis nmap con IA |
 | C | Cambiar objetivo |
 | S | Guardar resultados |
 
@@ -126,6 +163,7 @@ HacXGPT-Private/
 ├── mitre_extras_1.sh      # MITRE: Reconnaissance
 ├── mitre_extras_2.sh      # MITRE: Execution/Persistence
 ├── mitre_extras_3.sh      # MITRE: Exfiltration/Impact
+├── nmap_ai.py             # Módulo 14: análisis nmap con IA
 └── docs/
     ├── USO.md
     └── MITRE_ATTACK.md
@@ -135,6 +173,7 @@ HacXGPT-Private/
 
 | Versión | Fecha | Cambios |
 |---------|-------|---------|
+| v8.2 | Abril 2026 | Gap Analysis dinámico, tracking MITRE, fix dependencias, troubleshooting |
 | v8.1 | Abril 2026 | IA local Ollama, detección automática Pi vs Windows/WSL |
 | v8.0 | Marzo 2026 | MITRE completo, Purple Team, APT Sims, Gap Analysis |
 | v7.0 | Anterior | Chat libre, escaneo sigiloso |

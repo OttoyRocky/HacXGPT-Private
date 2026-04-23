@@ -18,16 +18,13 @@ _chat_with_ollama() {
     local RED='\033[0;31m'
     local NC='\033[0m'
     
-    # Ollama corre en Windows, acceso via curl directo
+    if ! command -v ollama &> /dev/null; then
+        _chat_default_fallback "$pregunta"
+        return
+    fi
     
     # Priorizar modelos livianos para Raspberry Pi
-    # Detectar entorno: Pi usa localhost con modelo liviano, Windows/WSL usa IP remota
-    local ollama_host="http://172.20.160.1:11435"
-    local model="mistral:7b"
-    if curl -s --max-time 2 http://localhost:11435/api/tags > /dev/null 2>&1; then
-        ollama_host="http://localhost:11435"
-        model="tinyllama"
-    fi
+    local model=$(ollama list 2>/dev/null | grep -E "tinyllama|gemma:2b|phi3:mini" | head -1 | awk '{print $1}')
     if [[ -z "$model" ]]; then
         model=$(ollama list 2>/dev/null | grep -v "NAME" | head -1 | awk '{print $1}')
     fi
@@ -42,7 +39,7 @@ _chat_with_ollama() {
     local system_prompt="Eres HacXGPT, experto en ciberseguridad ofensiva y pentesting. Contexto: El objetivo actual es $target. Responde de forma técnica, práctica y directa. Sé conciso."
     
     # Llamar a Ollama con contexto limitado para mayor velocidad
-    response=$(curl -s $ollama_host/api/generate -d "{
+    response=$(curl -s http://localhost:11434/api/generate -d "{
         \"model\": \"$model\",
         \"prompt\": \"$system_prompt\n\nPregunta del usuario: $pregunta\",
         \"stream\": false,

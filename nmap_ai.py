@@ -30,7 +30,7 @@ Escaneo:
     }
     
     req = urllib.request.Request(
-        "http://172.20.160.1:11434/api/generate",
+        "http://172.20.160.1:11435/api/generate",
         data=json.dumps(data).encode(),
         headers={"Content-Type": "application/json"}
     )
