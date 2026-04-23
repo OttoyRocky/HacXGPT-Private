@@ -1,12 +1,12 @@
 #!/bin/bash
 # Módulo 14: Análisis de nmap con IA
 
-# Detectar IP de Windows para WSL
-if grep -q Microsoft /proc/version 2>/dev/null; then
-    OLLAMA_HOST="172.20.160.1:11435"
-else
-    OLLAMA_HOST="localhost:11435"
-fi
+source "$(dirname "$0")/core/platform.sh"
+source "$(dirname "$0")/core/guarden.sh"
+
+resolve_ollama_host
+validate_target
+require_tool nmap curl
 
 OLLAMA_MODEL="mistral:7b"
 
