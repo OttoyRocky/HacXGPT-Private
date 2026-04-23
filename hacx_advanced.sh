@@ -3,25 +3,15 @@
 
 # Cargar datos MITRE ATT&CK (matrices, tácticas, APTs, CVEs)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [[ -f "$SCRIPT_DIR/mitre_data.sh" ]]; then
-    source "$SCRIPT_DIR/mitre_data.sh"
+if [[ -f "$SCRIPT_DIR/data/mitre_registry.sh" ]]; then
+    source "$SCRIPT_DIR/data/mitre_registry.sh"
 else
-    echo -e "\e[1;33m⚠️  mitre_data.sh no encontrado. Funciones MITRE desactivadas.\e[0m"
+    echo -e "\e[1;33m⚠️  data/mitre_registry.sh no encontrado.\e[0m"
 fi
-
-if [[ -f "$SCRIPT_DIR/mitre_extras_1.sh" ]]; then
-    source "$SCRIPT_DIR/mitre_extras_1.sh"
-fi
-if [[ -f "$SCRIPT_DIR/mitre_extras_2.sh" ]]; then
-    source "$SCRIPT_DIR/mitre_extras_2.sh"
-fi
-if [[ -f "$SCRIPT_DIR/mitre_extras_3.sh" ]]; then
-    source "$SCRIPT_DIR/mitre_extras_3.sh"
 
 # Cargar integracion Ollama
 if [ -f "$SCRIPT_DIR/ollama_integration.sh" ]; then
     source "$SCRIPT_DIR/ollama_integration.sh"
-fi
 fi
 
 # ============================================
