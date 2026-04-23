@@ -3,9 +3,9 @@
 
 # Detectar IP de Windows para WSL
 if grep -q Microsoft /proc/version 2>/dev/null; then
-    OLLAMA_HOST="172.20.160.1:11434"
+    OLLAMA_HOST="172.20.160.1:11435"
 else
-    OLLAMA_HOST="localhost:11434"
+    OLLAMA_HOST="localhost:11435"
 fi
 
 OLLAMA_MODEL="mistral:7b"

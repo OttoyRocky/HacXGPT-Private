@@ -6,7 +6,7 @@ NC='\033[0m'
 echo "Prueba directa de Ollama con mistral:7b"
 echo ""
 
-response=$(curl -s http://localhost:11434/api/generate -d '{
+response=$(curl -s http://172.20.160.1:11435/api/generate -d '{
   "model": "mistral:7b",
   "prompt": "Respondé en 2 lineas: como enumerar usuarios en un dominio Windows",
   "stream": false
