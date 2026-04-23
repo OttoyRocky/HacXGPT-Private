@@ -1,40 +1,28 @@
-# Cargar configuración si existe
-if [ -f "$(dirname "$0")/ollama_config.sh" ]; then
-    source "$(dirname "$0")/ollama_config.sh"
-fi
+#!/bin/bash
+# Ollama Integration - HacXGPT IA Real
 
-# ============================================
-# OLLAMA INTEGRATION - HacXGPT IA Real (Optimizado)
-# ============================================
+source "$(dirname "$0")/core/platform.sh"
+source "$(dirname "$0")/ollama_config.sh" 2>/dev/null
 
 _chat_with_ollama() {
     local pregunta="$1"
     local target="${CHAT_TARGET:-[OBJETIVO_NO_DEFINIDO]}"
     local response=""
-    
+
     local GREEN='\033[0;32m'
     local CYAN='\033[0;36m'
     local YELLOW='\033[1;33m'
     local RED='\033[0;31m'
     local NC='\033[0m'
-    
-    # Ollama corre en Windows, acceso via curl directo
-    
-    # Priorizar modelos livianos para Raspberry Pi
-    # Detectar entorno: Pi usa localhost con modelo liviano, Windows/WSL usa IP remota
-    local ollama_host="http://172.20.160.1:11435"
-    local model="mistral:7b"
-    if curl -s --max-time 2 http://localhost:11435/api/tags > /dev/null 2>&1; then
-        ollama_host="http://localhost:11435"
+
+    resolve_ollama_host
+
+    # Detectar modelo: Pi usa tinyllama, WSL/Linux usa config o mistral:7b
+    local model="${OLLAMA_MODEL:-mistral:7b}"
+    local platform
+    platform=$(detect_platform)
+    if [[ "$platform" == "RASPBERRY_PI" ]]; then
         model="tinyllama"
-    fi
-    if [[ -z "$model" ]]; then
-        model=$(ollama list 2>/dev/null | grep -v "NAME" | head -1 | awk '{print $1}')
-    fi
-    
-    if [[ -z "$model" ]]; then
-        _chat_default_fallback "$pregunta"
-        return
     fi
     
     echo -e "${CYAN}🤖 Consultando IA local (${model})...${NC}"
